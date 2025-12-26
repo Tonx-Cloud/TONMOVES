@@ -1,0 +1,6 @@
+=== TONMOVES FIX & DEPLOY ===
+Data: Fri Dec 26 17:16:25 -03 2025
+[0;34m[1/4] Corrigindo estrutura...[0m
+✓ App.tsx → src/
+[0;32m✅ Estrutura OK[0m
+[0;34m[2/4] Git commit...[0m
