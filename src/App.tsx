@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { analyzeAudio, VISUAL_STYLES } from '../services/gemini';
+﻿import React, { useState } from 'react';
+import { analyzeAudio, VISUAL_STYLES } from '../services/groq';
 
 interface Scene {
   timestamp: number;
@@ -29,7 +29,7 @@ const App: React.FC = () => {
       setError(null);
       setCurrentStep('upload');
     } else {
-      setError('Por favor, selecione um arquivo de áudio válido (MP3, WAV, OGG, etc.)');
+      setError('Por favor, selecione um arquivo de Ã¡udio vÃ¡lido (MP3, WAV, OGG, etc.)');
     }
   };
 
@@ -120,10 +120,10 @@ const App: React.FC = () => {
           margin: '0 0 10px 0',
           textShadow: '0 2px 10px rgba(0,0,0,0.2)',
         }}>
-          🎵 TONMOVES
+          ðŸŽµ TONMOVES
         </h1>
         <p style={{ color: 'rgba(255,255,255,0.95)', fontSize: 'clamp(16px, 3vw, 20px)', margin: 0 }}>
-          Transforme seu áudio em vídeo profissional com IA
+          Transforme seu Ã¡udio em vÃ­deo profissional com IA
         </p>
       </header>
 
@@ -137,7 +137,7 @@ const App: React.FC = () => {
             marginBottom: '20px',
             color: '#c00',
           }}>
-            <strong>⚠️ Erro:</strong> {error}
+            <strong>âš ï¸ Erro:</strong> {error}
           </div>
         )}
 
@@ -148,7 +148,7 @@ const App: React.FC = () => {
             padding: '40px',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
-            <h2 style={{ marginTop: 0, color: '#333' }}>1. Selecione seu áudio</h2>
+            <h2 style={{ marginTop: 0, color: '#333' }}>1. Selecione seu Ã¡udio</h2>
             
             <div style={{
               border: '2px dashed #667eea',
@@ -168,7 +168,7 @@ const App: React.FC = () => {
               <label htmlFor="audio-upload" style={{ cursor: 'pointer', display: 'block' }}>
                 {audioFile ? (
                   <>
-                    <div style={{ fontSize: '48px' }}>🎵</div>
+                    <div style={{ fontSize: '48px' }}>ðŸŽµ</div>
                     <p style={{ fontSize: '18px', color: '#667eea', fontWeight: 'bold', margin: '10px 0' }}>
                       {audioFile.name}
                     </p>
@@ -178,7 +178,7 @@ const App: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <div style={{ fontSize: '48px' }}>📁</div>
+                    <div style={{ fontSize: '48px' }}>ðŸ“</div>
                     <p style={{ fontSize: '18px', color: '#333', fontWeight: 'bold' }}>
                       Clique para selecionar
                     </p>
@@ -206,7 +206,7 @@ const App: React.FC = () => {
                   fontWeight: aspectRatio === '16:9' ? 'bold' : 'normal',
                 }}
               >
-                📺 16:9
+                ðŸ“º 16:9
               </button>
               <button
                 onClick={() => setAspectRatio('9:16')}
@@ -222,7 +222,7 @@ const App: React.FC = () => {
                   fontWeight: aspectRatio === '9:16' ? 'bold' : 'normal',
                 }}
               >
-                📱 9:16
+                ðŸ“± 9:16
               </button>
             </div>
 
@@ -268,7 +268,7 @@ const App: React.FC = () => {
                 boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none',
               }}
             >
-              {isAnalyzing ? '🔄 Analisando...' : '🚀 Analisar e Criar'}
+              {isAnalyzing ? 'ðŸ”„ Analisando...' : 'ðŸš€ Analisar e Criar'}
             </button>
           </div>
         )}
@@ -281,8 +281,8 @@ const App: React.FC = () => {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎧</div>
-            <h2 style={{ color: '#333' }}>Analisando áudio...</h2>
+            <div style={{ fontSize: '64px', marginBottom: '20px' }}>ðŸŽ§</div>
+            <h2 style={{ color: '#333' }}>Analisando Ã¡udio...</h2>
             <div style={{
               width: '100%',
               height: '12px',
@@ -309,7 +309,7 @@ const App: React.FC = () => {
             padding: '40px',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
           }}>
-            <h2 style={{ marginTop: 0, color: '#333' }}>✨ {scenes.length} cenas</h2>
+            <h2 style={{ marginTop: 0, color: '#333' }}>âœ¨ {scenes.length} cenas</h2>
             
             <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: '20px' }}>
               {scenes.map((scene, i) => (
@@ -345,7 +345,7 @@ const App: React.FC = () => {
                   cursor: 'pointer',
                 }}
               >
-                ← Voltar
+                â† Voltar
               </button>
               <button
                 onClick={handleGenerateVideo}
@@ -363,7 +363,7 @@ const App: React.FC = () => {
                   boxShadow: '0 4px 15px rgba(102,126,234,0.4)',
                 }}
               >
-                {isGenerating ? '🎬 Gerando...' : '🎬 Gerar Vídeo'}
+                {isGenerating ? 'ðŸŽ¬ Gerando...' : 'ðŸŽ¬ Gerar VÃ­deo'}
               </button>
             </div>
           </div>
@@ -377,8 +377,8 @@ const App: React.FC = () => {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎬</div>
-            <h2 style={{ color: '#333' }}>Gerando vídeo...</h2>
+            <div style={{ fontSize: '64px', marginBottom: '20px' }}>ðŸŽ¬</div>
+            <h2 style={{ color: '#333' }}>Gerando vÃ­deo...</h2>
             <p style={{ color: '#666' }}>Criando {scenes.length} cenas</p>
             <div style={{
               width: '100%',
@@ -407,8 +407,8 @@ const App: React.FC = () => {
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             textAlign: 'center',
           }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎉</div>
-            <h2 style={{ color: '#333' }}>Vídeo criado!</h2>
+            <div style={{ fontSize: '64px', marginBottom: '20px' }}>ðŸŽ‰</div>
+            <h2 style={{ color: '#333' }}>VÃ­deo criado!</h2>
             
             <div style={{
               background: '#f0f4ff',
@@ -440,7 +440,7 @@ const App: React.FC = () => {
                   cursor: 'pointer',
                 }}
               >
-                ⬇️ Download
+                â¬‡ï¸ Download
               </button>
               <button
                 onClick={resetApp}
@@ -457,7 +457,7 @@ const App: React.FC = () => {
                   cursor: 'pointer',
                 }}
               >
-                🔄 Criar Novo
+                ðŸ”„ Criar Novo
               </button>
             </div>
           </div>
@@ -471,10 +471,11 @@ const App: React.FC = () => {
         color: 'rgba(255,255,255,0.8)',
         fontSize: '14px',
       }}>
-        <p>Powered by Google Gemini AI • TONMOVES v2.7</p>
+        <p>Powered by Google Gemini AI â€¢ TONMOVES v2.7</p>
       </footer>
     </div>
   );
 };
 
 export default App;
+
