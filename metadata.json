@@ -1,0 +1,7 @@
+{
+  "name": "Ton Moves v 2.7",
+  "description": "A forma mais fácil de criar videoclipes a partir de áudio usando IA.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
