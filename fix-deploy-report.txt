@@ -4,3 +4,52 @@ Data: Fri Dec 26 17:16:25 -03 2025
 ✓ App.tsx → src/
 [0;32m✅ Estrutura OK[0m
 [0;34m[2/4] Git commit...[0m
+[main 79c8ee4] fix: structure
+ 13 files changed, 5842 insertions(+), 26 deletions(-)
+ create mode 100644 deploy-all.sh
+ create mode 100644 deploy-simple.sh
+ create mode 100644 deploy-termux.sh
+ create mode 100644 deploy-verbose.sh
+ create mode 100644 deploy-verbose2.sh
+ create mode 100644 fix-deploy-report.txt
+ create mode 100644 fix-deploy.sh
+ create mode 100644 package-lock.json
+ create mode 100644 setup-tonmoves.sh
+ rename App.tsx => src/App.tsx (100%)
+ create mode 100644 src/index.tsx
+[0;34m[3/4] Git push...[0m
+To https://github.com/Tonx-Cloud/TONMOVES.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/Tonx-Cloud/TONMOVES.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+[0;34m[4/4] Vercel deploy...[0m
+Vercel CLI 50.1.3
+Retrieving project…
+Deploying tonx/tonmoves
+Uploading [--------------------] (0.0B/6.7KB)
+Uploading [=========-----------] (3.2KB/6.7KB)
+Uploading [==========----------] (3.4KB/6.7KB)
+Uploading [====================] (6.7KB/6.7KB)
+Inspect: https://vercel.com/tonx/tonmoves/3WZhrPWWBUFoCHFzpS6ydQwHfjYf [3s]
+Production: https://tonmoves-fmva1we14-tonx.vercel.app [3s]
+https://tonmoves-fmva1we14-tonx.vercel.appQueued...
+Queued...
+Building: Running build in Portland, USA (West) – pdx1
+Building: Build machine configuration: 2 cores, 8 GB
+Building: Retrieving list of deployment files...
+Building: Skipping build cache, deployment was triggered without cache.
+Building: Downloading 29 deployment files...
+Building: Running "vercel build"
+Building: Vercel CLI 50.1.3
+Building: Installing dependencies...
+Building: npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+Building: added 169 packages in 3s
+Building: 33 packages are looking for funding
+Building: run `npm fund` for details
+Building: > ton-moves-v-2.7@0.0.0 build
+Building: > vite build
+Error: Command "npm run build" exited with 1
