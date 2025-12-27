@@ -48,9 +48,17 @@ const THEME_STYLES = {
 
 export class ImageGenerator {
   private globalContext: GlobalContext | null = null;
+  private togetherApiKey: string | null = null;
 
   constructor() {
-    // Não precisa de API key!
+    // ✅ Tentar pegar API key do Together AI (opcional)
+    this.togetherApiKey = import.meta.env.VITE_TOGETHER_API_KEY || null;
+    
+    if (this.togetherApiKey) {
+      console.log('✅ Together AI configurado (RÁPIDO)');
+    } else {
+      console.log('ℹ️ Usando Pollinations (GRÁTIS mas lento)');
+    }
   }
 
   async generatePrompts(
@@ -59,7 +67,6 @@ export class ImageGenerator {
     theme: Theme = 'cinematic',
     audioAnalysis?: AudioAnalysis
   ): Promise<ImagePrompt[]> {
-    // ✅ GRÁTIS: Criar contexto global sem IA
     console.log('🎨 Creating story context (free)...');
     this.globalContext = this.createGlobalContextFree(
       musicTitle,
@@ -69,13 +76,10 @@ export class ImageGenerator {
 
     console.log('✅ Global context:', this.globalContext);
 
-    // ✅ GRÁTIS: Gerar prompts baseados em template
-    console.log('🎨 Generating prompts (template-based)...');
     const prompts: ImagePrompt[] = [];
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
-      const previousSegment = i > 0 ? segments[i - 1] : null;
 
       const prompt = this.createTemplatePrompt(
         segment,
@@ -99,7 +103,6 @@ export class ImageGenerator {
     return prompts;
   }
 
-  // ✅ GRÁTIS: Criar contexto global sem IA
   private createGlobalContextFree(
     musicTitle: string,
     theme: Theme,
@@ -109,7 +112,6 @@ export class ImageGenerator {
     const narrative = audioAnalysis?.narrative;
 
     if (narrative && narrative.characters.length > 0) {
-      // Usar narrativa detectada
       return {
         mainTheme: narrative.story,
         mood: this.getMoodFromNarrative(narrative),
@@ -120,7 +122,6 @@ export class ImageGenerator {
       };
     }
 
-    // Fallback: usar tema apenas
     const themeContexts = {
       cinematic: {
         mainTheme: 'Epic cinematic visual journey',
@@ -169,7 +170,6 @@ export class ImageGenerator {
     return themeContexts[theme];
   }
 
-  // ✅ GRÁTIS: Criar prompt usando templates
   private createTemplatePrompt(
     segment: AudioSegment,
     index: number,
@@ -181,22 +181,18 @@ export class ImageGenerator {
     const context = this.globalContext!;
     const progress = index / totalSegments;
 
-    // Template base
     let prompt = '';
 
-    // Se tem narrativa, usar personagens e ação
     if (narrative && narrative.characters.length > 0) {
       const characters = narrative.characters.slice(0, 3).join(' and ');
       const action = segment.narrativeAction || this.getActionForProgress(progress);
       
       prompt = `${characters} ${action}, ${narrative.setting}, ${themeStyle.keywords}`;
     } 
-    // Se tem transcrição no segmento
     else if (segment.transcription) {
       const firstWords = segment.transcription.split(' ').slice(0, 10).join(' ');
       prompt = `Scene illustrating: "${firstWords}", ${context.visualElements[0]}, ${themeStyle.keywords}`;
     }
-    // Fallback: usar mood e elementos
     else {
       const element = context.visualElements[index % context.visualElements.length];
       const moodDescription = this.getMoodDescription(segment.mood);
@@ -204,7 +200,6 @@ export class ImageGenerator {
       prompt = `${moodDescription} scene featuring ${element}, ${themeStyle.keywords}`;
     }
 
-    // Adicionar cores do tema
     const colors = context.colors.slice(0, 3).join(' and ');
     prompt += `, color palette: ${colors}`;
 
@@ -258,13 +253,60 @@ export class ImageGenerator {
   }
 
   async generateImage(prompt: string, theme: Theme = 'cinematic'): Promise<string> {
-    // ✅ GRÁTIS: Pollinations.ai (100% grátis!)
     const themeStyle = THEME_STYLES[theme];
-    const fullPrompt = `${prompt}, ${themeStyle.keywords}, high quality, detailed`;
-    const encodedPrompt = encodeURIComponent(fullPrompt);
+    const fullPrompt = `${prompt}, ${themeStyle.keywords}, high quality, detailed, 9:16 aspect ratio, vertical format`;
+    
+    // ✅ MÉTODO 1: Together AI (RÁPIDO - 1-2s)
+    if (this.togetherApiKey) {
+      try {
+        console.log('🚀 Tentando Together AI (RÁPIDO)...');
+        return await this.generateWithTogetherAI(fullPrompt);
+      } catch (error) {
+        console.warn('⚠️ Together AI falhou, usando Pollinations...', error);
+      }
+    }
+    
+    // ✅ MÉTODO 2: Pollinations (GRÁTIS - 3-5s)
+    console.log('🎨 Usando Pollinations (grátis)...');
+    return await this.generateWithPollinations(fullPrompt);
+  }
+
+  // ✅ Together AI - FLUX-1 (RÁPIDO!)
+  private async generateWithTogetherAI(prompt: string): Promise<string> {
+    const response = await fetch('https://api.together.xyz/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.togetherApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'black-forest-labs/FLUX.1-schnell',
+        prompt: prompt,
+        width: 720,
+        height: 1280,
+        steps: 4, // Schnell = rápido, usa poucos steps
+        n: 1,
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Together AI error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.data || !data.data[0] || !data.data[0].url) {
+      throw new Error('Together AI: No image URL returned');
+    }
+
+    return data.data[0].url;
+  }
+
+  // ✅ Pollinations (FALLBACK)
+  private async generateWithPollinations(prompt: string): Promise<string> {
+    const encodedPrompt = encodeURIComponent(prompt);
     const seed = Math.floor(Math.random() * 1000000);
     
-    // Usar modelo Flux (melhor qualidade)
     return `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&width=720&height=1280&nologo=true&model=flux&enhance=true`;
   }
 }
