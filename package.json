@@ -9,7 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "groq-sdk": "^0.37.0",
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
+    "groq-sdk": "^0.8.0",
+    "idb": "^8.0.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
   },
