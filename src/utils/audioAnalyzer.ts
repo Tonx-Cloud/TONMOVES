@@ -1,148 +1,453 @@
-export interface AudioAnalysis {
-  bpm: number;
-  energy: number;
-  segments: AudioSegment[];
-  duration: number;
-}
-
 export interface AudioSegment {
   startTime: number;
   endTime: number;
   energy: number;
   dominantFrequency: number;
   mood: 'calm' | 'energetic' | 'intense' | 'dark';
+  transcription?: string;
+  narrativeAction?: string;
+}
+
+export interface AudioAnalysis {
+  bpm: number;
+  energy: number;
+  duration: number;
+  segments: AudioSegment[];
+  fullTranscription?: string;
+  narrative?: NarrativeAnalysis;
+}
+
+export interface NarrativeAnalysis {
+  story: string;
+  characters: string[];
+  setting: string;
+  keyMoments: {
+    time: number;
+    description: string;
+  }[];
 }
 
 export class AudioAnalyzer {
-  private audioContext: AudioContext;
-  private audioBuffer: AudioBuffer | null = null;
+  private audioContext: AudioContext | null = null;
 
-  constructor() {
-    this.audioContext = new AudioContext();
+  async analyzeAudio(
+    audioFile: File,
+    options: {
+      transcribe?: boolean;
+      analyzeNarrative?: boolean;
+      useFilename?: boolean;  // ✅ NOVO: Usar nome do arquivo
+    } = {}
+  ): Promise<AudioAnalysis> {
+    try {
+      this.audioContext = new AudioContext();
+
+      // Decode audio
+      const arrayBuffer = await audioFile.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+
+      // Analyze audio properties
+      const analysis = this.analyzeAudioBuffer(audioBuffer);
+
+      // ✅ GRÁTIS: Usar nome do arquivo para contexto
+      if (options.useFilename) {
+        const filenameContext = this.extractContextFromFilename(audioFile.name);
+        if (filenameContext) {
+          analysis.narrative = filenameContext;
+          analysis.fullTranscription = `[Contexto do arquivo: ${audioFile.name}]`;
+        }
+      }
+
+      // ✅ GRÁTIS: Transcrever com Web Speech API (navegador)
+      if (options.transcribe) {
+        try {
+          console.log('🎤 Tentando transcrever com Web Speech API...');
+          const transcription = await this.transcribeWithWebSpeech(audioFile);
+          if (transcription) {
+            analysis.fullTranscription = transcription;
+            analysis.segments = this.addTranscriptionToSegments(
+              analysis.segments,
+              transcription,
+              analysis.duration
+            );
+          }
+        } catch (error) {
+          console.warn('Web Speech API não disponível, usando nome do arquivo');
+        }
+      }
+
+      // ✅ GRÁTIS: Análise simples de narrativa (sem IA)
+      if (options.analyzeNarrative && analysis.fullTranscription) {
+        analysis.narrative = this.analyzeNarrativeSimple(
+          analysis.fullTranscription,
+          audioFile.name
+        );
+        
+        analysis.segments = this.addNarrativeActionsToSegments(
+          analysis.segments,
+          analysis.narrative
+        );
+      }
+
+      return analysis;
+    } catch (error) {
+      console.error('Error analyzing audio:', error);
+      throw error;
+    }
   }
 
-  async analyzeAudio(file: File): Promise<AudioAnalysis> {
-    // Load audio file
-    const arrayBuffer = await file.arrayBuffer();
-    this.audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+  // ✅ GRÁTIS: Extrair contexto do nome do arquivo
+  private extractContextFromFilename(filename: string): NarrativeAnalysis | null {
+    const name = filename.toLowerCase()
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[_-]/g, ' ');
 
-    // Analyze
-    const bpm = await this.detectBPM();
-    const energy = this.calculateEnergy();
-    const segments = this.createSegments();
-
-    return {
-      bpm,
-      energy,
-      segments,
-      duration: this.audioBuffer.duration
+    // Detectar palavras-chave
+    const keywords = {
+      animals: ['gato', 'cat', 'cachorro', 'dog', 'passaro', 'bird', 'animal'],
+      food: ['queijo', 'cheese', 'pao', 'bread', 'comida', 'food'],
+      emotions: ['amor', 'love', 'triste', 'sad', 'feliz', 'happy'],
+      actions: ['briga', 'fight', 'danca', 'dance', 'corre', 'run'],
+      numbers: ['dois', 'two', 'tres', 'three', 'um', 'one']
     };
-  }
 
-  private async detectBPM(): Promise<number> {
-    if (!this.audioBuffer) return 120;
-
-    const channelData = this.audioBuffer.getChannelData(0);
-    const sampleRate = this.audioBuffer.sampleRate;
+    const detected: string[] = [];
     
-    // Simple peak detection for BPM
-    const peakThreshold = 0.5;
-    const peaks: number[] = [];
-    
-    for (let i = 0; i < channelData.length; i++) {
-      if (Math.abs(channelData[i]) > peakThreshold) {
-        peaks.push(i / sampleRate);
+    // Buscar palavras-chave
+    for (const [category, words] of Object.entries(keywords)) {
+      for (const word of words) {
+        if (name.includes(word)) {
+          detected.push(word);
+        }
       }
     }
 
-    // Calculate average interval between peaks
-    if (peaks.length < 2) return 120;
-    
-    const intervals = [];
-    for (let i = 1; i < peaks.length; i++) {
-      intervals.push(peaks[i] - peaks[i - 1]);
+    if (detected.length === 0) return null;
+
+    // Criar narrativa baseada em palavras detectadas
+    const hasAnimals = detected.some(w => keywords.animals.includes(w));
+    const hasFood = detected.some(w => keywords.food.includes(w));
+    const hasAction = detected.some(w => keywords.actions.includes(w));
+
+    if (hasAnimals && hasFood && hasAction) {
+      return {
+        story: `Story about animals and food with action`,
+        characters: detected.filter(w => keywords.animals.includes(w) || keywords.numbers.includes(w)),
+        setting: 'everyday scenario',
+        keyMoments: [
+          { time: 0.0, description: 'Introduction of characters' },
+          { time: 0.3, description: 'Discovery of food' },
+          { time: 0.6, description: 'Action begins' },
+          { time: 1.0, description: 'Resolution' }
+        ]
+      };
     }
-    
-    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-    const bpm = 60 / avgInterval;
-    
-    return Math.round(Math.max(60, Math.min(180, bpm)));
+
+    return {
+      story: `Musical story featuring: ${detected.join(', ')}`,
+      characters: detected,
+      setting: 'musical setting',
+      keyMoments: [
+        { time: 0.0, description: 'Beginning' },
+        { time: 0.5, description: 'Middle' },
+        { time: 1.0, description: 'End' }
+      ]
+    };
   }
 
-  private calculateEnergy(): number {
-    if (!this.audioBuffer) return 0.5;
+  // ✅ GRÁTIS: Web Speech API (funciona no Chrome/Edge)
+  private async transcribeWithWebSpeech(audioFile: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      // Check if Web Speech API is available
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      
+      if (!SpeechRecognition) {
+        reject(new Error('Web Speech API not supported'));
+        return;
+      }
 
-    const channelData = this.audioBuffer.getChannelData(0);
-    let sum = 0;
+      // Create audio element to play the file
+      const audio = new Audio(URL.createObjectURL(audioFile));
+      const recognition = new SpeechRecognition();
+      
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'pt-BR';  // Português do Brasil
+      
+      let transcript = '';
+      let startTime: number;
+
+      recognition.onstart = () => {
+        console.log('🎤 Transcrição iniciada...');
+        startTime = Date.now();
+      };
+
+      recognition.onresult = (event: any) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            transcript += event.results[i][0].transcript + ' ';
+          }
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        reject(new Error(event.error));
+      };
+
+      recognition.onend = () => {
+        const elapsed = Date.now() - startTime;
+        console.log(`✅ Transcrição finalizada em ${elapsed}ms`);
+        resolve(transcript.trim());
+      };
+
+      // Start recognition and play audio
+      audio.play().then(() => {
+        recognition.start();
+        
+        // Stop when audio ends
+        audio.onended = () => {
+          setTimeout(() => {
+            recognition.stop();
+          }, 500);
+        };
+      }).catch(reject);
+    });
+  }
+
+  // ✅ GRÁTIS: Análise narrativa simples (sem IA)
+  private analyzeNarrativeSimple(
+    transcription: string,
+    filename: string
+  ): NarrativeAnalysis {
+    const text = transcription.toLowerCase();
     
+    // Detectar personagens (substantivos comuns)
+    const commonCharacters = [
+      'gato', 'gata', 'gatinho', 'cat',
+      'cachorro', 'dog', 'passaro', 'bird',
+      'menino', 'menina', 'crianca', 'boy', 'girl',
+      'homem', 'mulher', 'man', 'woman',
+      'rei', 'rainha', 'king', 'queen'
+    ];
+    
+    const characters: string[] = [];
+    for (const char of commonCharacters) {
+      if (text.includes(char)) {
+        characters.push(char);
+      }
+    }
+
+    // Detectar números (dois, três, etc)
+    const numbers = ['um', 'dois', 'tres', 'quatro', 'cinco', 'one', 'two', 'three'];
+    for (const num of numbers) {
+      if (text.includes(num)) {
+        characters.push(num);
+      }
+    }
+
+    // Detectar objetos importantes
+    const objects = [
+      'queijo', 'cheese', 'pao', 'bread',
+      'bola', 'ball', 'casa', 'house'
+    ];
+    
+    for (const obj of objects) {
+      if (text.includes(obj)) {
+        characters.push(obj);
+      }
+    }
+
+    // Detectar ações
+    const actions = [
+      'briga', 'brigou', 'fight',
+      'danca', 'dancou', 'dance',
+      'corre', 'correu', 'run',
+      'pula', 'pulou', 'jump',
+      'come', 'comeu', 'eat'
+    ];
+    
+    let mainAction = 'interact';
+    for (const action of actions) {
+      if (text.includes(action)) {
+        mainAction = action;
+        break;
+      }
+    }
+
+    // Detectar cenário
+    const settings = [
+      'casa', 'home', 'rua', 'street',
+      'floresta', 'forest', 'praia', 'beach',
+      'cidade', 'city', 'campo', 'field'
+    ];
+    
+    let setting = 'outdoor setting';
+    for (const set of settings) {
+      if (text.includes(set)) {
+        setting = set;
+        break;
+      }
+    }
+
+    // Criar história resumida
+    const story = characters.length > 0
+      ? `Story about ${characters.slice(0, 3).join(', ')} ${mainAction} in ${setting}`
+      : `Musical narrative in ${setting}`;
+
+    return {
+      story,
+      characters: [...new Set(characters)].slice(0, 5),
+      setting,
+      keyMoments: [
+        { time: 0.0, description: `Characters: ${characters.join(', ')}` },
+        { time: 0.33, description: `Action: ${mainAction}` },
+        { time: 0.66, description: `Conflict develops` },
+        { time: 1.0, description: `Resolution` }
+      ]
+    };
+  }
+
+  private analyzeAudioBuffer(audioBuffer: AudioBuffer): AudioAnalysis {
+    const channelData = audioBuffer.getChannelData(0);
+    const sampleRate = audioBuffer.sampleRate;
+    const duration = audioBuffer.duration;
+
+    const bpm = this.detectBPM(channelData, sampleRate);
+
+    let totalEnergy = 0;
     for (let i = 0; i < channelData.length; i++) {
-      sum += channelData[i] * channelData[i];
+      totalEnergy += Math.abs(channelData[i]);
     }
-    
-    const rms = Math.sqrt(sum / channelData.length);
-    return Math.min(1, rms * 10); // Normalize to 0-1
-  }
+    const energy = totalEnergy / channelData.length;
 
-  private createSegments(): AudioSegment[] {
-    if (!this.audioBuffer) return [];
-
-    const duration = this.audioBuffer.duration;
-    const segmentDuration = 2; // 2 seconds per segment
-    const numSegments = Math.ceil(duration / segmentDuration);
+    const segmentDuration = 5;
     const segments: AudioSegment[] = [];
+    const numSegments = Math.ceil(duration / segmentDuration);
 
     for (let i = 0; i < numSegments; i++) {
       const startTime = i * segmentDuration;
       const endTime = Math.min((i + 1) * segmentDuration, duration);
-      
-      const segmentEnergy = this.getSegmentEnergy(startTime, endTime);
-      const dominantFrequency = this.getDominantFrequency(startTime, endTime);
-      
-      segments.push({
+      const segment = this.analyzeSegment(
+        channelData,
+        sampleRate,
         startTime,
-        endTime,
-        energy: segmentEnergy,
-        dominantFrequency,
-        mood: this.determineMood(segmentEnergy, dominantFrequency)
-      });
+        endTime
+      );
+      segments.push(segment);
     }
 
-    return segments;
+    return {
+      bpm,
+      energy,
+      duration,
+      segments
+    };
   }
 
-  private getSegmentEnergy(startTime: number, endTime: number): number {
-    if (!this.audioBuffer) return 0.5;
-
-    const channelData = this.audioBuffer.getChannelData(0);
-    const sampleRate = this.audioBuffer.sampleRate;
+  private analyzeSegment(
+    channelData: Float32Array,
+    sampleRate: number,
+    startTime: number,
+    endTime: number
+  ): AudioSegment {
     const startSample = Math.floor(startTime * sampleRate);
     const endSample = Math.floor(endTime * sampleRate);
-    
-    let sum = 0;
-    for (let i = startSample; i < endSample; i++) {
-      sum += channelData[i] * channelData[i];
+
+    let segmentEnergy = 0;
+    let dominantFrequency = 0;
+
+    for (let i = startSample; i < endSample && i < channelData.length; i++) {
+      segmentEnergy += Math.abs(channelData[i]);
     }
-    
-    const rms = Math.sqrt(sum / (endSample - startSample));
-    return Math.min(1, rms * 10);
+
+    const numSamples = endSample - startSample;
+    segmentEnergy = numSamples > 0 ? segmentEnergy / numSamples : 0;
+    dominantFrequency = segmentEnergy > 0.1 ? 200 : 100;
+
+    let mood: AudioSegment['mood'];
+    if (segmentEnergy < 0.05) mood = 'calm';
+    else if (segmentEnergy < 0.15) mood = 'energetic';
+    else if (segmentEnergy < 0.25) mood = 'intense';
+    else mood = 'dark';
+
+    return {
+      startTime,
+      endTime,
+      energy: segmentEnergy,
+      dominantFrequency,
+      mood
+    };
   }
 
-  private getDominantFrequency(startTime: number, endTime: number): number {
-    // Simplified: return a value between 0-1 representing low to high frequencies
-    const energy = this.getSegmentEnergy(startTime, endTime);
-    return energy * 0.7 + Math.random() * 0.3; // Add some variation
+  private detectBPM(channelData: Float32Array, sampleRate: number): number {
+    const windowSize = Math.floor(sampleRate * 0.1);
+    let maxEnergy = 0;
+    let peakCount = 0;
+
+    for (let i = 0; i < channelData.length - windowSize; i += windowSize) {
+      let energy = 0;
+      for (let j = 0; j < windowSize; j++) {
+        energy += Math.abs(channelData[i + j]);
+      }
+      if (energy > maxEnergy * 0.7) {
+        peakCount++;
+        maxEnergy = Math.max(maxEnergy, energy);
+      }
+    }
+
+    const duration = channelData.length / sampleRate;
+    return Math.round((peakCount / duration) * 60);
   }
 
-  private determineMood(energy: number, frequency: number): AudioSegment['mood'] {
-    if (energy > 0.7 && frequency > 0.6) return 'intense';
-    if (energy > 0.5) return 'energetic';
-    if (frequency < 0.4) return 'dark';
-    return 'calm';
+  private addTranscriptionToSegments(
+    segments: AudioSegment[],
+    fullTranscription: string,
+    duration: number
+  ): AudioSegment[] {
+    const words = fullTranscription.split(/\s+/);
+    const wordsPerSegment = Math.ceil(words.length / segments.length);
+
+    return segments.map((segment, index) => {
+      const startWord = index * wordsPerSegment;
+      const endWord = Math.min((index + 1) * wordsPerSegment, words.length);
+      const segmentWords = words.slice(startWord, endWord);
+
+      return {
+        ...segment,
+        transcription: segmentWords.join(' ')
+      };
+    });
+  }
+
+  private addNarrativeActionsToSegments(
+    segments: AudioSegment[],
+    narrative: NarrativeAnalysis
+  ): AudioSegment[] {
+    return segments.map((segment, index) => {
+      const progress = index / segments.length;
+      
+      let closestMoment = narrative.keyMoments[0];
+      let minDiff = Math.abs(progress - (closestMoment?.time || 0));
+
+      for (const moment of narrative.keyMoments) {
+        const diff = Math.abs(progress - moment.time);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestMoment = moment;
+        }
+      }
+
+      return {
+        ...segment,
+        narrativeAction: closestMoment?.description || ''
+      };
+    });
   }
 
   cleanup() {
-    if (this.audioContext.state !== 'closed') {
+    if (this.audioContext) {
       this.audioContext.close();
+      this.audioContext = null;
     }
   }
 }
