@@ -116,6 +116,12 @@ const App: React.FC = () => {
     }
     if (checkpoint.data.generatedImages) {
       setGeneratedImages(checkpoint.data.generatedImages);
+      
+      // ✅ Se tem imagens prontas, ir direto para composição
+      if (checkpoint.step === 'images-complete' || checkpoint.progress >= 75) {
+        setCurrentStep('composing');
+        setStatusMessage('📂 Imagens recuperadas! Pronto para criar vídeo.');
+      }
     }
     if (checkpoint.data.aspectRatio) {
       setAspectRatio(checkpoint.data.aspectRatio as AspectRatio);
@@ -173,6 +179,72 @@ const App: React.FC = () => {
       setError(null);
     } else {
       setError('Por favor, solte um arquivo de áudio válido');
+    }
+  };
+
+  // ✅ NOVO: Criar vídeo a partir de imagens recuperadas
+  const handleCreateVideoFromRecovered = async () => {
+    if (generatedImages.length === 0) {
+      setError('Nenhuma imagem encontrada para criar vídeo');
+      return;
+    }
+
+    if (!audioFile) {
+      setError('Arquivo de áudio não encontrado. Faça upload novamente.');
+      return;
+    }
+
+    try {
+      setError(null);
+      setCurrentStep('composing');
+      setProgress(75);
+      setStatusMessage('🎬 Criando vídeo com as imagens recuperadas...');
+
+      videoComposerRef.current = new VideoComposer();
+      await videoComposerRef.current.load((p) => {
+        setProgress(75 + (p / 100) * 20);
+        if (p % 20 === 0) {
+          setStatusMessage(`🎬 Carregando FFmpeg... ${p}%`);
+        }
+      });
+
+      setStatusMessage('🎬 Renderizando vídeo...');
+
+      const videoOptions: VideoOptions = {
+        fps: 30,
+        width: aspectRatio === '9:16' ? 720 : 1280,
+        height: aspectRatio === '9:16' ? 1280 : 720,
+        audioFile,
+      };
+
+      console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height);
+
+      const videoBlob = await videoComposerRef.current.createVideo(
+        generatedImages,
+        videoOptions,
+        (p) => {
+          setProgress(75 + 20 + (p / 100) * 5);
+          if (p % 25 === 0) {
+            setStatusMessage(`🎬 Renderizando... ${p}%`);
+          }
+        }
+      );
+
+      const videoObjectUrl = URL.createObjectURL(videoBlob);
+      setVideoUrl(videoObjectUrl);
+
+      setProgress(100);
+      setCurrentStep('done');
+      setStatusMessage('✅ Vídeo criado com sucesso!');
+
+      if (checkpointManagerRef.current) {
+        await checkpointManagerRef.current.clearCheckpoint();
+      }
+
+    } catch (err) {
+      console.error('Erro ao criar vídeo:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao criar vídeo');
+      setStatusMessage('❌ Erro ao criar vídeo!');
     }
   };
 
@@ -252,53 +324,95 @@ const App: React.FC = () => {
       setProgress(30);
       await saveCheckpoint('prompts-created', 30);
       
-      setStatusMessage(`🎨 Gerando ${prompts.length} imagens...`);
+      setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
       
       const images: StoredImage[] = [];
       
-      for (let i = 0; i < prompts.length; i++) {
-        const imagePrompt = prompts[i];
-        const narrativeInfo = imagePrompt.narrativeContext 
-          ? ` - ${imagePrompt.narrativeContext}`
-          : '';
+      // ✅ GERAÇÃO PARALELA CONTROLADA - 2 imagens por vez + delay
+      const BATCH_SIZE = 2;
+      const DELAY_BETWEEN_BATCHES = 500; // 500ms entre batches
+      
+      for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
+        const batch = prompts.slice(batchStart, batchEnd);
         
-        setStatusMessage(`🎨 Imagem ${i + 1}/${prompts.length}${narrativeInfo}`);
+        setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
         
         try {
-          const imageUrl = await imageGeneratorRef.current.generateImage(
-            imagePrompt.prompt,
-            selectedTheme
+          // Gerar todas as imagens do batch em paralelo
+          const batchResults = await Promise.all(
+            batch.map(async (imagePrompt, batchIndex) => {
+              const globalIndex = batchStart + batchIndex;
+              
+              try {
+                const imageUrl = await imageGeneratorRef.current!.generateImage(
+                  imagePrompt.prompt,
+                  selectedTheme
+                );
+                
+                const blob = await imageStorageRef.current!.downloadImage(imageUrl);
+                
+                const storedImage: StoredImage = {
+                  id: `img-${Date.now()}-${globalIndex}`,
+                  url: imageUrl,
+                  blob,
+                  prompt: imagePrompt.prompt,
+                  timestamp: Date.now(),
+                  segmentIndex: globalIndex,
+                };
+                
+                await imageStorageRef.current!.saveImage(storedImage);
+                return storedImage;
+                
+              } catch (imgError) {
+                console.error(`Erro na imagem ${globalIndex + 1}:`, imgError);
+                
+                // ✅ RETRY uma vez em caso de 502
+                console.log(`🔄 Tentando novamente imagem ${globalIndex + 1}...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const retryUrl = await imageGeneratorRef.current!.generateImage(
+                  imagePrompt.prompt,
+                  selectedTheme
+                );
+                
+                const retryBlob = await imageStorageRef.current!.downloadImage(retryUrl);
+                
+                const storedImage: StoredImage = {
+                  id: `img-${Date.now()}-${globalIndex}`,
+                  url: retryUrl,
+                  blob: retryBlob,
+                  prompt: imagePrompt.prompt,
+                  timestamp: Date.now(),
+                  segmentIndex: globalIndex,
+                };
+                
+                await imageStorageRef.current!.saveImage(storedImage);
+                return storedImage;
+              }
+            })
           );
           
-          const blob = await imageStorageRef.current.downloadImage(imageUrl);
-          
-          const storedImage: StoredImage = {
-            id: `img-${Date.now()}-${i}`,
-            url: imageUrl,
-            blob,
-            prompt: imagePrompt.prompt,
-            timestamp: Date.now(),
-            segmentIndex: i,
-          };
-          
-          await imageStorageRef.current.saveImage(storedImage);
-          images.push(storedImage);
+          // Adicionar todas as imagens do batch
+          images.push(...batchResults);
           setGeneratedImages([...images]);
           
-          const imgProgress = 30 + ((i + 1) / prompts.length) * 45;
+          const imgProgress = 30 + (images.length / prompts.length) * 45;
           setProgress(imgProgress);
           
-          // ✅ CHECKPOINT a cada 3 imagens
-          if ((i + 1) % 3 === 0 || i === prompts.length - 1) {
-            await saveCheckpoint(`image-${i + 1}`, imgProgress);
+          // ✅ CHECKPOINT após cada batch
+          await saveCheckpoint(`batch-${batchEnd}`, imgProgress);
+          
+          // ✅ DELAY entre batches para não sobrecarregar
+          if (batchEnd < prompts.length) {
+            await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
           }
           
-        } catch (imgError) {
-          console.error(`Erro na imagem ${i + 1}:`, imgError);
-          setError(`⚠️ Erro na imagem ${i + 1}, mas progresso salvo. Você pode tentar novamente.`);
-          // ✅ Salvar checkpoint mesmo com erro
-          await saveCheckpoint(`error-image-${i + 1}`, 30 + ((i + 1) / prompts.length) * 45);
-          throw imgError;
+        } catch (batchError) {
+          console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
+          setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
+          await saveCheckpoint(`error-batch-${batchEnd}`, 30 + (images.length / prompts.length) * 45);
+          throw batchError;
         }
       }
       
@@ -755,6 +869,50 @@ const App: React.FC = () => {
               </div>
             )}
             
+            {/* Progress Bar */}
+            <div style={{
+              width: '100%',
+              height: '12px',
+              background: '#eee',
+              borderRadius: '6px',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                width: `${progress}%`,
+                height: '100%',
+                background: currentTheme.gradient,
+                transition: 'width 0.3s ease',
+              }} />
+            </div>
+            <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>
+              {progress.toFixed(0)}% • {generatedImages.length} imagens salvas
+            </p>
+
+            {/* ✅ NOVO: Botão para criar vídeo quando recupera checkpoint */}
+            {currentStep === 'composing' && progress === 75 && generatedImages.length > 0 && !videoUrl && (
+              <button
+                onClick={handleCreateVideoFromRecovered}
+                style={{
+                  width: '100%',
+                  padding: '20px',
+                  marginTop: '20px',
+                  background: currentTheme.gradient,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(102,126,234,0.4)',
+                  transition: 'transform 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                🎬 Criar Vídeo Agora ({generatedImages.length} imagens prontas)
+              </button>
+            )}
+
             {/* Progress Bar */}
             <div style={{
               width: '100%',

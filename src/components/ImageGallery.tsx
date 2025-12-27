@@ -37,7 +37,8 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
         )}
       </div>
 
-      <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* ✅ GRID DE 5 COLUNAS */}
+      <div className="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-3">
         {images.map((img) => (
           <div
             key={img.id}
@@ -48,9 +49,9 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
               alt={`Segment ${img.segmentIndex + 1}`}
               className="w-full object-cover"
               style={{ 
-                height: '80px',
-                maxHeight: '80px',
-                minHeight: '80px'
+                height: '100px',
+                maxHeight: '100px',
+                minHeight: '100px'
               }}
             />
             
@@ -82,15 +83,6 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
           </div>
         ))}
       </div>
-
-      {/* Prompt Preview (optional) */}
-      {images.length > 0 && images[0].prompt && (
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-          <p className="text-xs text-gray-600">
-            <strong>Último prompt:</strong> {images[images.length - 1].prompt}
-          </p>
-        </div>
-      )}
     </div>
   );
 };
