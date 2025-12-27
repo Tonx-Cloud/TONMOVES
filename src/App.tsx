@@ -1,11 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { AudioAnalyzer, type AudioAnalysis } from './utils/audioAnalyzer';
-import { ImageGenerator, type ImagePrompt } from './utils/imageGenerator';
+import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext } from './utils/imageGenerator';
 import { ImageStorage, type StoredImage } from './utils/imageStorage';
 import { VideoComposer, type VideoOptions } from './utils/videoComposer';
 import { ImageGallery } from './components/ImageGallery';
 
-type Theme = 'cinematic' | 'neon' | 'nature' | 'abstract' | 'minimal' | 'baby';
 type AspectRatio = '16:9' | '9:16';
 type Step = 'upload' | 'analyzing' | 'generating' | 'composing' | 'done';
 
@@ -64,6 +63,7 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
   const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
+  const [globalContext, setGlobalContext] = useState<GlobalContext | null>(null);
   const [generatedImages, setGeneratedImages] = useState<StoredImage[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +84,7 @@ const App: React.FC = () => {
       setCurrentStep('upload');
       setGeneratedImages([]);
       setVideoUrl(null);
+      setGlobalContext(null);
     } else {
       setError('Por favor, selecione um arquivo de áudio válido (MP3, WAV, OGG, etc.)');
     }
@@ -125,34 +126,52 @@ const App: React.FC = () => {
       // Step 1: Analyze Audio
       setCurrentStep('analyzing');
       setProgress(0);
-      setStatusMessage('Analisando áudio...');
+      setStatusMessage('🎧 Analisando áudio...');
       
       audioAnalyzerRef.current = new AudioAnalyzer();
       const analysis = await audioAnalyzerRef.current.analyzeAudio(audioFile);
       setAudioAnalysis(analysis);
-      setProgress(25);
+      setProgress(15);
       
-      // Step 2: Generate Images
+      setStatusMessage(`✅ Áudio analisado: ${analysis.segments.length} segmentos, ${analysis.bpm} BPM`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 2: Generate Images with Global Context
       setCurrentStep('generating');
-      setStatusMessage(`Gerando ${analysis.segments.length} imagens com IA...`);
+      setProgress(20);
+      setStatusMessage('🤖 Analisando contexto global com IA...');
       
       imageGeneratorRef.current = new ImageGenerator(groqApiKey);
       imageStorageRef.current = new ImageStorage();
       await imageStorageRef.current.init();
       
+      // ✅ CORREÇÃO 1: Passar tema e análise de áudio
       const prompts = await imageGeneratorRef.current.generatePrompts(
         analysis.segments,
-        audioFile.name.replace(/\.[^/.]+$/, '')
+        audioFile.name.replace(/\.[^/.]+$/, ''),
+        selectedTheme,  // ✅ TEMA AGORA É PASSADO!
+        analysis
       );
+      
+      // Extract global context from first prompt
+      if (prompts[0]?.globalContext) {
+        setGlobalContext(prompts[0].globalContext);
+      }
+      
+      setProgress(30);
+      setStatusMessage(`🎨 Gerando ${prompts.length} imagens com tema ${THEMES[selectedTheme].name}...`);
       
       const images: StoredImage[] = [];
       
       for (let i = 0; i < prompts.length; i++) {
         const imagePrompt = prompts[i];
-        setStatusMessage(`Gerando imagem ${i + 1}/${prompts.length}...`);
+        setStatusMessage(`🎨 Gerando imagem ${i + 1}/${prompts.length}: ${imagePrompt.prompt.substring(0, 50)}...`);
         
-        // Generate image URL
-        const imageUrl = await imageGeneratorRef.current.generateImage(imagePrompt.prompt);
+        // ✅ CORREÇÃO 2: Passar tema para geração de imagem
+        const imageUrl = await imageGeneratorRef.current.generateImage(
+          imagePrompt.prompt,
+          selectedTheme  // ✅ TEMA PASSADO AQUI TAMBÉM!
+        );
         
         // Download and store
         const blob = await imageStorageRef.current.downloadImage(imageUrl);
@@ -170,19 +189,24 @@ const App: React.FC = () => {
         images.push(storedImage);
         setGeneratedImages([...images]);
         
-        setProgress(25 + (i / prompts.length) * 50);
+        setProgress(30 + ((i + 1) / prompts.length) * 45);
       }
       
       setProgress(75);
       
       // Step 3: Compose Video
       setCurrentStep('composing');
-      setStatusMessage('Criando vídeo final...');
+      setStatusMessage('🎬 Criando vídeo final...');
       
       videoComposerRef.current = new VideoComposer();
       await videoComposerRef.current.load((p) => {
         setProgress(75 + (p / 100) * 20);
+        if (p % 20 === 0) {
+          setStatusMessage(`🎬 Carregando FFmpeg... ${p}%`);
+        }
       });
+      
+      setStatusMessage('🎬 Compondo vídeo...');
       
       const videoOptions: VideoOptions = {
         fps: 30,
@@ -194,7 +218,12 @@ const App: React.FC = () => {
       const videoBlob = await videoComposerRef.current.createVideo(
         images,
         videoOptions,
-        (p) => setProgress(75 + 20 + (p / 100) * 5)
+        (p) => {
+          setProgress(75 + 20 + (p / 100) * 5);
+          if (p % 25 === 0) {
+            setStatusMessage(`🎬 Renderizando... ${p}%`);
+          }
+        }
       );
       
       const videoObjectUrl = URL.createObjectURL(videoBlob);
@@ -202,7 +231,7 @@ const App: React.FC = () => {
       
       setProgress(100);
       setCurrentStep('done');
-      setStatusMessage('Vídeo criado com sucesso!');
+      setStatusMessage('✅ Vídeo criado com sucesso!');
       
     } catch (err) {
       console.error('Erro ao gerar vídeo:', err);
@@ -217,6 +246,7 @@ const App: React.FC = () => {
     setProgress(0);
     setStatusMessage('');
     setAudioAnalysis(null);
+    setGlobalContext(null);
     setGeneratedImages([]);
     setVideoUrl(null);
     setError(null);
@@ -475,6 +505,30 @@ const App: React.FC = () => {
               {statusMessage}
             </p>
             
+            {/* ✅ MELHORIA: Mostrar contexto global */}
+            {globalContext && (
+              <div style={{
+                background: '#f0f4ff',
+                padding: '16px',
+                borderRadius: '12px',
+                marginBottom: '20px',
+                textAlign: 'left',
+              }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#667eea' }}>
+                  🎬 Tema Global: {currentTheme.emoji} {currentTheme.name}
+                </h3>
+                <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
+                  <strong>Conceito:</strong> {globalContext.mainTheme}
+                </p>
+                <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
+                  <strong>Mood:</strong> {globalContext.mood}
+                </p>
+                <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
+                  <strong>Elementos:</strong> {globalContext.visualElements.join(', ')}
+                </p>
+              </div>
+            )}
+            
             {/* Progress Bar */}
             <div style={{
               width: '100%',
@@ -521,6 +575,24 @@ const App: React.FC = () => {
             <h2 style={{ color: '#333', marginBottom: '20px' }}>
               Vídeo criado com sucesso!
             </h2>
+            
+            {/* Global Context Summary */}
+            {globalContext && (
+              <div style={{
+                background: '#f0f4ff',
+                padding: '16px',
+                borderRadius: '12px',
+                marginBottom: '20px',
+                textAlign: 'left',
+              }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#667eea' }}>
+                  🎬 Tema: {currentTheme.emoji} {currentTheme.name}
+                </h3>
+                <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
+                  {globalContext.mainTheme}
+                </p>
+              </div>
+            )}
             
             {/* Video Preview */}
             <div style={{
@@ -644,7 +716,7 @@ const App: React.FC = () => {
           Powered by GROQ AI + Pollinations.ai + FFmpeg.wasm
         </p>
         <p style={{ margin: '5px 0' }}>
-          TONMOVES v2.8 • Tema: {currentTheme.emoji} {currentTheme.name}
+          TONMOVES v3.0 • Tema: {currentTheme.emoji} {currentTheme.name}
         </p>
       </footer>
     </div>
