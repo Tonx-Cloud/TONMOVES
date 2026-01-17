@@ -553,18 +553,7 @@ const App: React.FC = () => {
               </div>
             )}
             {error && (
-              <div 
-                style={{ 
-                  background: '#fee', 
-                  border: '2px solid #f44', 
-                  borderRadius: '12px', 
-                  padding: '16px', 
-                  marginBottom: '20px', 
-                  color: '#c00' 
-                }}
-                role="alert"
-                aria-live="assertive"
-              >
+              <div style={{ background: '#fee', border: '2px solid #f44', borderRadius: '12px', padding: '16px', marginBottom: '20px', color: '#c00' }} role="alert" aria-live="assertive">
                 <strong>⚠️ {error}</strong>
                 {generatedImages.length > 0 && (
                   <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
@@ -700,24 +689,7 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                <button 
-                  onClick={handleStartGeneration} 
-                  disabled={!audioFile} 
-                  style={{ 
-                    width: '100%', 
-                    padding: '20px', 
-                    background: audioFile ? currentTheme.gradient : '#ccc', 
-                    color: 'white', 
-                    border: 'none', 
-                    borderRadius: '12px', 
-                    fontSize: '18px', 
-                    fontWeight: 'bold', 
-                    cursor: audioFile ? 'pointer' : 'not-allowed', 
-                    boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none',
-                    transition: 'background 0.3s ease'
-                  }}
-                  aria-label="Iniciar geração de vídeo"
-                >
+                <button onClick={handleStartGeneration} disabled={!audioFile} style={{ width: '100%', padding: '20px', background: audioFile ? currentTheme.gradient : '#ccc', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: audioFile ? 'pointer' : 'not-allowed', boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none', transition: 'background 0.3s ease' }} aria-label="Iniciar geração de vídeo">
                   {audioFile ? (
                     <>
                       <div>Criar Video</div>
@@ -755,20 +727,7 @@ const App: React.FC = () => {
                     <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>{globalContext.mainTheme}</p>
                   </div>
                 )}
-                <div 
-                  style={{ 
-                    width: '100%', 
-                    height: '12px', 
-                    background: '#eee', 
-                    borderRadius: '6px', 
-                    overflow: 'hidden' 
-                  }}
-                  aria-label="Barra de progresso"
-                  role="progressbar"
-                  aria-valuenow={progress}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
+                <div style={{ width: '100%', height: '12px', background: '#eee', borderRadius: '6px', overflow: 'hidden' }} aria-label="Barra de progresso" role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
                   <div style={{ width: `${progress}%`, height: '100%', background: currentTheme.gradient, transition: 'width 0.3s ease' }} />
                 </div>
                 <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>{progress.toFixed(0)}% • {generatedImages.length} imagens salvas</p>
