@@ -13,7 +13,7 @@ export type Step = 'upload' | 'analyzing' | 'generating' | 'composing' | 'done';
 export type CurrentView = 'main' | 'settings';
 
 // Definir os tipos de provedores de vídeo e transcrição aqui para uso global
-export type VideoProvider = 'local' | 'pexels' | 'runwayml' | 'lumaai' | 'stability';
+export type VideoProvider = 'local' | 'pexels' | 'runwayml' | 'lumaai' | 'stability' | 'runwayml-gen3';
 export type TranscriptionProvider = 'disabled' | 'filename' | 'groq' | 'openai';
 
 const VIDEO_MODES: { id: VideoMode; name: string; description: string; icon: string }[] = [
@@ -51,7 +51,7 @@ const App: React.FC = () => {
   const [apiKeys, setApiKeys] = useState<Record<ImageProvider, string>>({
     pollinations: '', pexels: '', together: '', openai: '', gemini: '',
   });
-  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('local');
+  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('runwayml-gen3');
   const [videoApiKeys, setVideoApiKeys] = useState<Record<VideoProvider, string>>({
     local: '', pexels: '', runwayml: '', lumaai: '', stability: '',
   });
@@ -532,6 +532,23 @@ const App: React.FC = () => {
                     <button onClick={handleRecoverProgress} style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>✅ Recuperar</button>
                     <button onClick={async () => { if (checkpointManagerRef.current) { await checkpointManagerRef.current.clearCheckpoint(); setHasCheckpoint(false); } }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🗑️ Descartar</button>
                   </div>
+                  <button
+                    onClick={() => setSelectedVideoProvider('runwayml-gen3')}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '16px',
+                      border: `2px solid ${selectedVideoProvider === 'runwayml-gen3' ? '#667eea' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'runwayml-gen3' ? '#f0f4ff' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎥</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'runwayml-gen3' ? 'bold' : 'normal' }}>RunwayML Gen-3</div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Gera vídeos animados com IA</div>
+                  </button>
                 </div>
               </div>
             )}
