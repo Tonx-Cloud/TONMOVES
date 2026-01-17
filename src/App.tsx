@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AudioAnalyzer, type AudioAnalysis, type NarrativeAnalysis } from './utils/audioAnalyzer';
-import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ProviderConfig } from './utils/imageGenerator';
+import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ProviderConfig, searchPexelsVideos } from './utils/imageGenerator';
 import { ImageStorage, type StoredImage } from './utils/imageStorage';
 import { VideoComposer, type VideoOptions, type VideoMode } from './utils/videoComposer';
 import { ImageGallery } from './components/ImageGallery';
@@ -277,36 +277,103 @@ const App: React.FC = () => {
       if (prompts[0]?.globalContext) setGlobalContext(prompts[0].globalContext);
       setProgress(30);
       await saveCheckpoint('prompts-created', 30);
-      setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
+
       const images: StoredImage[] = [];
-      const BATCH_SIZE = 2;
-      const DELAY_BETWEEN_BATCHES = 500;
-      for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
-        const batch = prompts.slice(batchStart, batchEnd);
-        setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
-        try {
-          const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
-            const globalIndex = batchStart + batchIndex;
-            const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
-            const storedImage: StoredImage = {
-              id: `img-${Date.now()}-${globalIndex}`, url: imageUrl, prompt: imagePrompt.prompt,
-              timestamp: Date.now(), segmentIndex: globalIndex,
-            };
-            await imageStorageRef.current!.saveImage(storedImage);
-            return storedImage;
-          }));
-          images.push(...batchResults);
-          setGeneratedImages([...images]);
-          const imgProgress = 30 + (images.length / prompts.length) * 45;
-          setProgress(imgProgress);
-          await saveCheckpoint(`batch-${batchEnd}`, imgProgress);
-          if (batchEnd < prompts.length) await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-        } catch (batchError) {
-          console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
-          setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
-          await saveCheckpoint(`error-batch-${batchEnd}`, 30 + (images.length / prompts.length) * 45);
-          throw batchError;
+
+      // ===== MODO VÍDEOS PEXELS =====
+      if (selectedVideoProvider === 'pexels' && apiKeys.pexels) {
+        setStatusMessage(`🎬 Buscando ${prompts.length} clipes de vídeo no Pexels...`);
+
+        // Criar queries de busca baseadas nos prompts
+        const searchQueries = prompts.map(p => {
+          // Extrair palavras-chave do prompt para busca
+          const keywords = p.prompt.split(' ').slice(0, 3).join(' ');
+          return keywords;
+        });
+
+        // Buscar vídeos para cada segmento
+        for (let i = 0; i < searchQueries.length; i++) {
+          try {
+            setStatusMessage(`📹 Buscando vídeo ${i + 1}/${searchQueries.length}: "${searchQueries[i]}"...`);
+
+            // Buscar vídeos do Pexels
+            const videos = await searchPexelsVideos(searchQueries[i], apiKeys.pexels, 1);
+
+            if (videos.length > 0) {
+              const storedVideo: StoredImage = {
+                id: `video-${Date.now()}-${i}`,
+                url: videos[0].url,
+                prompt: prompts[i].prompt,
+                timestamp: Date.now(),
+                segmentIndex: i,
+              };
+              images.push(storedVideo);
+              await imageStorageRef.current!.saveImage(storedVideo);
+            } else {
+              // Fallback: usar tema genérico
+              const fallbackVideos = await searchPexelsVideos(selectedTheme, apiKeys.pexels, 1);
+              if (fallbackVideos.length > 0) {
+                const storedVideo: StoredImage = {
+                  id: `video-${Date.now()}-${i}`,
+                  url: fallbackVideos[0].url,
+                  prompt: prompts[i].prompt,
+                  timestamp: Date.now(),
+                  segmentIndex: i,
+                };
+                images.push(storedVideo);
+                await imageStorageRef.current!.saveImage(storedVideo);
+              }
+            }
+
+            setGeneratedImages([...images]);
+            const vidProgress = 30 + ((i + 1) / searchQueries.length) * 45;
+            setProgress(vidProgress);
+            await saveCheckpoint(`video-${i}`, vidProgress);
+
+            // Pequeno delay entre requisições
+            if (i < searchQueries.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          } catch (videoError) {
+            console.error(`Erro ao buscar vídeo ${i}:`, videoError);
+          }
+        }
+
+        setStatusMessage(`✅ ${images.length} clipes de vídeo encontrados!`);
+
+      } else {
+        // ===== MODO IMAGENS (PADRÃO) =====
+        setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
+        const BATCH_SIZE = 2;
+        const DELAY_BETWEEN_BATCHES = 500;
+
+        for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
+          const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
+          const batch = prompts.slice(batchStart, batchEnd);
+          setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
+          try {
+            const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
+              const globalIndex = batchStart + batchIndex;
+              const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
+              const storedImage: StoredImage = {
+                id: `img-${Date.now()}-${globalIndex}`, url: imageUrl, prompt: imagePrompt.prompt,
+                timestamp: Date.now(), segmentIndex: globalIndex,
+              };
+              await imageStorageRef.current!.saveImage(storedImage);
+              return storedImage;
+            }));
+            images.push(...batchResults);
+            setGeneratedImages([...images]);
+            const imgProgress = 30 + (images.length / prompts.length) * 45;
+            setProgress(imgProgress);
+            await saveCheckpoint(`batch-${batchEnd}`, imgProgress);
+            if (batchEnd < prompts.length) await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+          } catch (batchError) {
+            console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
+            setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
+            await saveCheckpoint(`error-batch-${batchEnd}`, 30 + (images.length / prompts.length) * 45);
+            throw batchError;
+          }
         }
       }
       setProgress(75);
@@ -517,6 +584,90 @@ const App: React.FC = () => {
                         </button>
                     ))}
                 </div>
+
+                {/* Seção 5: Fonte de Mídia */}
+                <h3 style={{ color: '#333' }}>5. Fonte de mídia</h3>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setSelectedVideoProvider('local')}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '16px',
+                      border: `2px solid ${selectedVideoProvider === 'local' || selectedVideoProvider === 'pexels' && selectedProvider !== 'pexels' ? '#667eea' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'local' ? '#f0f4ff' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🖼️</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'local' ? 'bold' : 'normal' }}>Imagens IA</div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Gera imagens com IA e anima</div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedVideoProvider('pexels');
+                      setSelectedProvider('pexels');
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '16px',
+                      border: `2px solid ${selectedVideoProvider === 'pexels' ? '#667eea' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'pexels' ? '#f0f4ff' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎬</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'pexels' ? 'bold' : 'normal' }}>Vídeos Pexels</div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Busca clipes de vídeo reais HD</div>
+                  </button>
+                </div>
+
+                {/* Seletor de provider de imagem (só mostra se for modo Imagens IA) */}
+                {selectedVideoProvider === 'local' && (
+                  <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+                    <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#666', fontWeight: '500' }}>Gerador de imagens:</p>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {IMAGE_PROVIDERS.slice(0, 4).map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedProvider(p.id)}
+                          style={{
+                            padding: '8px 14px',
+                            border: `2px solid ${selectedProvider === p.id ? '#667eea' : '#ddd'}`,
+                            borderRadius: '6px',
+                            background: selectedProvider === p.id ? '#e0e7ff' : 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: selectedProvider === p.id ? 'bold' : 'normal',
+                          }}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                    {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.needsKey && !apiKeys[selectedProvider] && (
+                      <p style={{ margin: '10px 0 0 0', fontSize: '11px', color: '#dc2626' }}>
+                        ⚠️ Configure a API key em Configurações
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Aviso para Pexels Videos */}
+                {selectedVideoProvider === 'pexels' && (
+                  <div style={{ background: '#fef3c7', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #fcd34d' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>
+                      <strong>📹 Modo Vídeos:</strong> Serão buscados clipes de vídeo reais do Pexels baseados no tema e análise do áudio.
+                      {!apiKeys.pexels && <span style={{ color: '#dc2626' }}> ⚠️ Configure a API key do Pexels em Configurações!</span>}
+                    </p>
+                  </div>
+                )}
+
                 <button onClick={handleStartGeneration} disabled={!audioFile} style={{ width: '100%', padding: '20px', background: audioFile ? currentTheme.gradient : '#ccc', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: audioFile ? 'pointer' : 'not-allowed', boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none' }}>
                   {audioFile ? (
                     <>
