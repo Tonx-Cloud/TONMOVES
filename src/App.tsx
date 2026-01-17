@@ -611,7 +611,30 @@ const App: React.FC = () => {
 
       {/* Header */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center', position: 'relative' }}>
-        <button onClick={() => setIsSidebarOpen(true)} style={{ position: 'absolute', left: 0, background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontSize: '24px' }}>
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          style={{
+            position: 'absolute',
+            left: 0,
+            background: 'rgba(255,255,255,0.25)',
+            border: '2px solid rgba(255,255,255,0.3)',
+            color: 'white',
+            padding: '12px 16px',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            fontSize: '24px',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.4)';
+            e.currentTarget.style.transform = 'scale(1.05)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+        >
           ☰
         </button>
         <div>
@@ -639,4 +662,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App;// Force rebuild 1768638301
+export default App;
