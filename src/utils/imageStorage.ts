@@ -10,6 +10,7 @@ export interface StoredImage {
   timestamp: number;
   segmentIndex: number;
   animationType?: AnimationType;
+  videoUrl?: string; // URL do vídeo gerado por IA (RunwayML, Luma, Stability)
 }
 
 const DB_NAME = 'tonmoves-images';

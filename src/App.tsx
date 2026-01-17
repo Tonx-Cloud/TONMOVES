@@ -3,6 +3,7 @@ import { AudioAnalyzer, type AudioAnalysis, type NarrativeAnalysis } from './uti
 import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ProviderConfig, searchPexelsVideos } from './utils/imageGenerator';
 import { ImageStorage, type StoredImage } from './utils/imageStorage';
 import { VideoComposer, type VideoOptions, type VideoMode } from './utils/videoComposer';
+import { generateVideoFromImage, type VideoAIProvider, type GeneratedVideo } from './utils/videoGenerator';
 import { ImageGallery } from './components/ImageGallery';
 import { CheckpointManager, type Checkpoint } from './utils/checkpointManager';
 import { Sidebar } from './components/layout/Sidebar';
@@ -378,11 +379,65 @@ const App: React.FC = () => {
       }
       setProgress(75);
       await saveCheckpoint('images-complete', 75);
+
+      // ===== MODO VIDEO IA (RunwayML, Luma, Stability) =====
+      const isVideoAIMode = selectedVideoProvider === 'runwayml' || selectedVideoProvider === 'lumaai' || selectedVideoProvider === 'stability';
+
+      if (isVideoAIMode) {
+        const videoAIProvider = selectedVideoProvider as VideoAIProvider;
+        const videoAIKey = videoApiKeys[selectedVideoProvider];
+
+        if (!videoAIKey) {
+          throw new Error(`API key não configurada para ${VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name}`);
+        }
+
+        setStatusMessage(`🎬 Gerando vídeos com ${VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name}...`);
+
+        const generatedVideos: GeneratedVideo[] = [];
+
+        for (let i = 0; i < images.length; i++) {
+          try {
+            setStatusMessage(`🎥 Gerando vídeo ${i + 1}/${images.length} com IA...`);
+            setProgress(75 + ((i / images.length) * 20));
+
+            // Gerar vídeo a partir da imagem
+            const videoResult = await generateVideoFromImage(
+              images[i].url,
+              videoAIProvider,
+              videoAIKey,
+              {
+                prompt: images[i].prompt,
+                duration: 4,
+                aspectRatio: aspectRatio === '9:16' ? '9:16' : '16:9',
+              }
+            );
+
+            generatedVideos.push(videoResult);
+
+            // Atualizar a imagem com a URL do vídeo gerado
+            images[i] = {
+              ...images[i],
+              videoUrl: videoResult.url,
+            };
+
+            setGeneratedImages([...images]);
+            await saveCheckpoint(`video-ai-${i}`, 75 + ((i + 1) / images.length) * 20);
+
+          } catch (videoError) {
+            console.error(`Erro ao gerar vídeo ${i}:`, videoError);
+            setStatusMessage(`⚠️ Erro no vídeo ${i + 1}, usando imagem original...`);
+            // Continua com a próxima imagem
+          }
+        }
+
+        setStatusMessage(`✅ ${generatedVideos.length} vídeos IA gerados!`);
+      }
+
       setCurrentStep('composing');
       setStatusMessage('🎬 Criando vídeo final...');
       videoComposerRef.current = new VideoComposer();
       await videoComposerRef.current.load((p) => {
-        setProgress(75 + (p / 100) * 20);
+        setProgress(95 + (p / 100) * 3);
         if (p % 20 === 0) setStatusMessage(`🎬 FFmpeg... ${p}%`);
       });
       setStatusMessage('🎬 Renderizando vídeo...');
@@ -392,7 +447,7 @@ const App: React.FC = () => {
       };
       console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
       const videoBlob = await videoComposerRef.current.createVideo(images, videoOptions, (p) => {
-        setProgress(75 + 20 + (p / 100) * 5);
+        setProgress(98 + (p / 100) * 2);
         if (p % 25 === 0) setStatusMessage(`🎬 Renderizando... ${p}%`);
       });
       const videoObjectUrl = URL.createObjectURL(videoBlob);
@@ -591,14 +646,13 @@ const App: React.FC = () => {
 
                 {/* Seção 5: Fonte de Mídia */}
                 <h3 style={{ color: '#333' }}>5. Fonte de mídia</h3>
-                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '15px' }}>
+                  {/* Opção: Imagens IA */}
                   <button
                     onClick={() => setSelectedVideoProvider('local')}
                     style={{
-                      flex: 1,
-                      minWidth: '200px',
-                      padding: '16px',
-                      border: `2px solid ${selectedVideoProvider === 'local' || selectedVideoProvider === 'pexels' && selectedProvider !== 'pexels' ? '#667eea' : '#ddd'}`,
+                      padding: '16px 12px',
+                      border: `2px solid ${selectedVideoProvider === 'local' ? '#667eea' : '#ddd'}`,
                       borderRadius: '8px',
                       background: selectedVideoProvider === 'local' ? '#f0f4ff' : 'white',
                       cursor: 'pointer',
@@ -606,9 +660,11 @@ const App: React.FC = () => {
                     }}
                   >
                     <div style={{ fontSize: '24px', marginBottom: '4px' }}>🖼️</div>
-                    <div style={{ fontWeight: selectedVideoProvider === 'local' ? 'bold' : 'normal' }}>Imagens IA</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Gera imagens com IA e anima</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'local' ? 'bold' : 'normal', fontSize: '13px' }}>Imagens IA</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>Gera e anima com FFmpeg</div>
                   </button>
+
+                  {/* Opção: Fotos Pexels */}
                   <button
                     onClick={() => {
                       setSelectedVideoProvider('pexels');
@@ -616,9 +672,7 @@ const App: React.FC = () => {
                     }}
                     disabled={!apiKeys.pexels}
                     style={{
-                      flex: 1,
-                      minWidth: '200px',
-                      padding: '16px',
+                      padding: '16px 12px',
                       border: `2px solid ${selectedVideoProvider === 'pexels' ? '#667eea' : '#ddd'}`,
                       borderRadius: '8px',
                       background: selectedVideoProvider === 'pexels' ? '#f0f4ff' : 'white',
@@ -628,17 +682,82 @@ const App: React.FC = () => {
                     }}
                   >
                     <div style={{ fontSize: '24px', marginBottom: '4px' }}>📸</div>
-                    <div style={{ fontWeight: selectedVideoProvider === 'pexels' ? 'bold' : 'normal' }}>Fotos Pexels</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
-                      {apiKeys.pexels ? 'Fotos profissionais reais HD' : '⚠️ Configure API key'}
+                    <div style={{ fontWeight: selectedVideoProvider === 'pexels' ? 'bold' : 'normal', fontSize: '13px' }}>Fotos Pexels</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {apiKeys.pexels ? 'Fotos reais HD' : '⚠️ API key'}
+                    </div>
+                  </button>
+
+                  {/* Opção: RunwayML Gen-3 */}
+                  <button
+                    onClick={() => setSelectedVideoProvider('runwayml')}
+                    disabled={!videoApiKeys.runwayml}
+                    style={{
+                      padding: '16px 12px',
+                      border: `2px solid ${selectedVideoProvider === 'runwayml' ? '#f59e0b' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'runwayml' ? '#fef3c7' : 'white',
+                      cursor: videoApiKeys.runwayml ? 'pointer' : 'not-allowed',
+                      textAlign: 'center',
+                      opacity: videoApiKeys.runwayml ? 1 : 0.5,
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎥</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'runwayml' ? 'bold' : 'normal', fontSize: '13px' }}>RunwayML</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {videoApiKeys.runwayml ? 'Video IA Gen-3' : '⚠️ API key'}
+                    </div>
+                  </button>
+
+                  {/* Opção: Luma AI */}
+                  <button
+                    onClick={() => setSelectedVideoProvider('lumaai')}
+                    disabled={!videoApiKeys.lumaai}
+                    style={{
+                      padding: '16px 12px',
+                      border: `2px solid ${selectedVideoProvider === 'lumaai' ? '#8b5cf6' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'lumaai' ? '#f3e8ff' : 'white',
+                      cursor: videoApiKeys.lumaai ? 'pointer' : 'not-allowed',
+                      textAlign: 'center',
+                      opacity: videoApiKeys.lumaai ? 1 : 0.5,
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🌙</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'lumaai' ? 'bold' : 'normal', fontSize: '13px' }}>Luma AI</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {videoApiKeys.lumaai ? 'Dream Machine' : '⚠️ API key'}
+                    </div>
+                  </button>
+
+                  {/* Opção: Stability AI */}
+                  <button
+                    onClick={() => setSelectedVideoProvider('stability')}
+                    disabled={!videoApiKeys.stability}
+                    style={{
+                      padding: '16px 12px',
+                      border: `2px solid ${selectedVideoProvider === 'stability' ? '#ec4899' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === 'stability' ? '#fce7f3' : 'white',
+                      cursor: videoApiKeys.stability ? 'pointer' : 'not-allowed',
+                      textAlign: 'center',
+                      opacity: videoApiKeys.stability ? 1 : 0.5,
+                    }}
+                  >
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎞️</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'stability' ? 'bold' : 'normal', fontSize: '13px' }}>Stability</div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {videoApiKeys.stability ? 'Stable Video' : '⚠️ API key'}
                     </div>
                   </button>
                 </div>
 
-                {/* Seletor de provider de imagem (só mostra se for modo Imagens IA) */}
-                {selectedVideoProvider === 'local' && (
+                {/* Seletor de provider de imagem (só mostra se for modo Imagens IA ou Video IA) */}
+                {(selectedVideoProvider === 'local' || selectedVideoProvider === 'runwayml' || selectedVideoProvider === 'lumaai' || selectedVideoProvider === 'stability') && (
                   <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
-                    <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#666', fontWeight: '500' }}>Gerador de imagens:</p>
+                    <p style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#666', fontWeight: '500' }}>
+                      {selectedVideoProvider === 'local' ? 'Gerador de imagens:' : 'Gerador de imagens base:'}
+                    </p>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {IMAGE_PROVIDERS.slice(0, 4).map(p => (
                         <button
@@ -671,6 +790,17 @@ const App: React.FC = () => {
                   <div style={{ background: '#e0f2fe', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #7dd3fc' }}>
                     <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>
                       <strong>📸 Modo Pexels:</strong> Busca fotos profissionais reais do Pexels baseadas no tema e análise do áudio.
+                    </p>
+                  </div>
+                )}
+
+                {/* Aviso para Video IA */}
+                {(selectedVideoProvider === 'runwayml' || selectedVideoProvider === 'lumaai' || selectedVideoProvider === 'stability') && (
+                  <div style={{ background: '#fef3c7', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #fcd34d' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>
+                      <strong>🎬 Modo Video IA:</strong> Primeiro gera imagens com {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.name},
+                      depois transforma cada imagem em vídeo de 4-5 segundos usando {VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name}.
+                      <br/><span style={{ fontSize: '11px', opacity: 0.8 }}>Processo mais lento (~2-5 min por imagem), mas resultados cinematográficos!</span>
                     </p>
                   </div>
                 )}
