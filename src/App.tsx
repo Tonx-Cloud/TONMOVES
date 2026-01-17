@@ -622,7 +622,7 @@ const App: React.FC = () => {
             Crie vídeos que contam histórias • 100% Grátis
           </p>
           <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '14px', margin: '5px 0 0 0' }}>
-            v4.0 FREE • Web Speech API • Auto-Save
+            v4.3 FREE • Whisper API • Auto-Save
           </p>
         </div>
       </header>
@@ -633,7 +633,7 @@ const App: React.FC = () => {
 
       <footer style={{ maxWidth: '900px', margin: '40px auto 0', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: '14px' }}>
         <p style={{ margin: '5px 0' }}>Web Speech API • Pollinations.ai • FFmpeg.wasm • 100% Grátis</p>
-        <p style={{ margin: '5px 0' }}>v4.0 FREE • Auto-Save • {aspectRatio} • {currentTheme.name}</p>
+        <p style={{ margin: '5px 0' }}>v4.3 FREE • Auto-Save • {aspectRatio} • {currentTheme.name}</p>
       </footer>
     </div>
   );
