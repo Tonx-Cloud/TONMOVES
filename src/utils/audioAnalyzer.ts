@@ -27,6 +27,8 @@ export interface NarrativeAnalysis {
   }[];
 }
 
+export type TranscriptionProvider = 'disabled' | 'filename' | 'groq' | 'openai';
+
 export class AudioAnalyzer {
   private audioContext: AudioContext | null = null;
 
@@ -35,7 +37,9 @@ export class AudioAnalyzer {
     options: {
       transcribe?: boolean;
       analyzeNarrative?: boolean;
-      useFilename?: boolean;  // ✅ NOVO: Usar nome do arquivo
+      useFilename?: boolean;
+      transcriptionProvider?: TranscriptionProvider;
+      transcriptionApiKey?: string;
     } = {}
   ): Promise<AudioAnalysis> {
     try {
@@ -57,11 +61,19 @@ export class AudioAnalyzer {
         }
       }
 
-      // ✅ GRÁTIS: Transcrever com Web Speech API (navegador)
-      if (options.transcribe) {
+      // Transcrever com o provider selecionado
+      if (options.transcribe && options.transcriptionProvider && options.transcriptionProvider !== 'disabled' && options.transcriptionProvider !== 'filename') {
         try {
-          console.log('🎤 Tentando transcrever com Web Speech API...');
-          const transcription = await this.transcribeWithWebSpeech(audioFile);
+          let transcription = '';
+
+          if (options.transcriptionProvider === 'groq' && options.transcriptionApiKey) {
+            console.log('🎤 Transcrevendo com Groq Whisper...');
+            transcription = await this.transcribeWithGroq(audioFile, options.transcriptionApiKey);
+          } else if (options.transcriptionProvider === 'openai' && options.transcriptionApiKey) {
+            console.log('🎤 Transcrevendo com OpenAI Whisper...');
+            transcription = await this.transcribeWithOpenAI(audioFile, options.transcriptionApiKey);
+          }
+
           if (transcription) {
             analysis.fullTranscription = transcription;
             analysis.segments = this.addTranscriptionToSegments(
@@ -71,7 +83,7 @@ export class AudioAnalyzer {
             );
           }
         } catch (error) {
-          console.warn('Web Speech API não disponível, usando nome do arquivo');
+          console.warn('Erro na transcrição:', error);
         }
       }
 
@@ -214,7 +226,59 @@ export class AudioAnalyzer {
     });
   }
 
-  // ✅ GRÁTIS: Análise narrativa simples (sem IA)
+  // Groq Whisper API (gratuito)
+  private async transcribeWithGroq(audioFile: File, apiKey: string): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    formData.append('model', 'whisper-large-v3');
+    formData.append('language', 'pt'); // Portugues
+    formData.append('response_format', 'json');
+
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Groq API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Transcrição Groq concluída:', data.text?.substring(0, 100) + '...');
+    return data.text || '';
+  }
+
+  // OpenAI Whisper API (pago)
+  private async transcribeWithOpenAI(audioFile: File, apiKey: string): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', audioFile);
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'pt'); // Portugues
+    formData.append('response_format', 'json');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Transcrição OpenAI concluída:', data.text?.substring(0, 100) + '...');
+    return data.text || '';
+  }
+
+  // Análise narrativa simples (sem IA)
   private analyzeNarrativeSimple(
     transcription: string,
     filename: string

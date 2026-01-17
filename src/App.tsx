@@ -1,13 +1,44 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AudioAnalyzer, type AudioAnalysis, type NarrativeAnalysis } from './utils/audioAnalyzer';
-import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext } from './utils/imageGenerator';
+import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ImageProvider, type ProviderConfig } from './utils/imageGenerator';
 import { ImageStorage, type StoredImage } from './utils/imageStorage';
-import { VideoComposer, type VideoOptions } from './utils/videoComposer';
+import { VideoComposer, type VideoOptions, type VideoMode } from './utils/videoComposer';
 import { ImageGallery } from './components/ImageGallery';
 import { CheckpointManager, type Checkpoint } from './utils/checkpointManager';
 
 type AspectRatio = '16:9' | '9:16';
 type Step = 'upload' | 'analyzing' | 'generating' | 'composing' | 'done';
+type VideoProvider = 'local' | 'pexels' | 'runwayml' | 'lumaai' | 'stability';
+
+const VIDEO_MODES: { id: VideoMode; name: string; description: string; icon: string }[] = [
+  { id: 'slideshow', name: 'Slideshow', description: '1 imagem a cada 3-5 segundos', icon: '🖼️' },
+  { id: 'animated', name: 'Animado', description: 'Menos imagens com zoom/pan', icon: '🎬' },
+];
+
+const IMAGE_PROVIDERS: { id: ImageProvider; name: string; needsKey: boolean; description: string }[] = [
+  { id: 'pollinations', name: 'Pollinations', needsKey: false, description: 'IA gratuita, sem limite, mais lento' },
+  { id: 'pexels', name: 'Pexels', needsKey: true, description: 'Fotos reais HD, gratuito com API key' },
+  { id: 'together', name: 'Together AI', needsKey: true, description: 'IA rapida, modelo FLUX.1, pago' },
+  { id: 'openai', name: 'OpenAI DALL-E 3', needsKey: true, description: 'IA alta qualidade, pago' },
+  { id: 'gemini', name: 'Google Gemini', needsKey: true, description: 'IA Imagen 3, pago' },
+];
+
+const VIDEO_PROVIDERS: { id: VideoProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
+  { id: 'local', name: 'Local (FFmpeg)', needsKey: false, description: 'Gratuito, processa no navegador', icon: '💻' },
+  { id: 'pexels', name: 'Pexels Videos', needsKey: true, description: 'Videos reais HD, gratuito com API key', icon: '📹' },
+  { id: 'runwayml', name: 'RunwayML Gen-3', needsKey: true, description: 'IA geradora de video de alta qualidade', icon: '🎥' },
+  { id: 'lumaai', name: 'Luma Dream Machine', needsKey: true, description: 'Videos cinematograficos com IA', icon: '🌙' },
+  { id: 'stability', name: 'Stability AI', needsKey: true, description: 'Stable Video Diffusion', icon: '🎞️' },
+];
+
+type TranscriptionProvider = 'disabled' | 'filename' | 'groq' | 'openai';
+
+const TRANSCRIPTION_PROVIDERS: { id: TranscriptionProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
+  { id: 'filename', name: 'Nome do Arquivo', needsKey: false, description: 'Extrai contexto do nome do arquivo (gratis)', icon: '📄' },
+  { id: 'groq', name: 'Groq Whisper', needsKey: true, description: 'Whisper gratuito, rapido e preciso', icon: '⚡' },
+  { id: 'openai', name: 'OpenAI Whisper', needsKey: true, description: 'Whisper original, muito preciso (~$0.006/min)', icon: '🎯' },
+  { id: 'disabled', name: 'Desativado', needsKey: false, description: 'Nao transcrever, usar apenas analise de audio', icon: '🔇' },
+];
 
 interface ThemeConfig {
   name: string;
@@ -60,7 +91,9 @@ const App: React.FC = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<Theme>('baby');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
-  const [enableTranscription, setEnableTranscription] = useState(true);
+  const [videoMode, setVideoMode] = useState<VideoMode>('slideshow');
+  const [transcriptionProvider, setTranscriptionProvider] = useState<TranscriptionProvider>('filename');
+  const [transcriptionApiKey, setTranscriptionApiKey] = useState('');
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
@@ -71,6 +104,87 @@ const App: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasCheckpoint, setHasCheckpoint] = useState(false);
+
+  // Provider de imagem
+  const [showConfig, setShowConfig] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<ImageProvider>('pollinations');
+  const [apiKeys, setApiKeys] = useState<Record<ImageProvider, string>>({
+    pollinations: '',
+    pexels: '',
+    together: '',
+    openai: '',
+    gemini: '',
+  });
+
+  // Provider de video
+  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('local');
+  const [videoApiKeys, setVideoApiKeys] = useState<Record<VideoProvider, string>>({
+    local: '',
+    pexels: '',
+    runwayml: '',
+    lumaai: '',
+    stability: '',
+  });
+
+  // Carregar config salva
+  useEffect(() => {
+    const savedConfig = ImageGenerator.getConfig();
+    setSelectedProvider(savedConfig.provider);
+    if (savedConfig.apiKey) {
+      setApiKeys(prev => ({ ...prev, [savedConfig.provider]: savedConfig.apiKey || '' }));
+    }
+    // Carregar todas as keys de imagem salvas
+    try {
+      const savedKeys = localStorage.getItem('tonmoves_api_keys');
+      if (savedKeys) {
+        setApiKeys(JSON.parse(savedKeys));
+      }
+    } catch {}
+    // Carregar keys de video salvas
+    try {
+      const savedVideoKeys = localStorage.getItem('tonmoves_video_api_keys');
+      if (savedVideoKeys) {
+        setVideoApiKeys(JSON.parse(savedVideoKeys));
+      }
+      const savedVideoProvider = localStorage.getItem('tonmoves_video_provider');
+      if (savedVideoProvider) {
+        setSelectedVideoProvider(savedVideoProvider as VideoProvider);
+      }
+    } catch {}
+    // Carregar config de transcricao
+    try {
+      const savedTranscriptionProvider = localStorage.getItem('tonmoves_transcription_provider');
+      if (savedTranscriptionProvider) {
+        setTranscriptionProvider(savedTranscriptionProvider as TranscriptionProvider);
+      }
+      const savedTranscriptionKey = localStorage.getItem('tonmoves_transcription_key');
+      if (savedTranscriptionKey) {
+        setTranscriptionApiKey(savedTranscriptionKey);
+      }
+    } catch {}
+  }, []);
+
+  // Salvar config de imagem
+  const handleSaveConfig = () => {
+    const config: ProviderConfig = {
+      provider: selectedProvider,
+      apiKey: apiKeys[selectedProvider] || undefined,
+    };
+    ImageGenerator.saveConfig(config);
+    localStorage.setItem('tonmoves_api_keys', JSON.stringify(apiKeys));
+  };
+
+  // Salvar config de video
+  const handleSaveVideoConfig = () => {
+    localStorage.setItem('tonmoves_video_api_keys', JSON.stringify(videoApiKeys));
+    localStorage.setItem('tonmoves_video_provider', selectedVideoProvider);
+  };
+
+  // Salvar config de transcricao
+  const handleSaveTranscriptionConfig = () => {
+    localStorage.setItem('tonmoves_transcription_provider', transcriptionProvider);
+    localStorage.setItem('tonmoves_transcription_key', transcriptionApiKey);
+  };
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,13 +325,14 @@ const App: React.FC = () => {
       setStatusMessage('🎬 Renderizando vídeo...');
 
       const videoOptions: VideoOptions = {
-        fps: 30,
+        fps: 24,
         width: aspectRatio === '9:16' ? 720 : 1280,
         height: aspectRatio === '9:16' ? 1280 : 720,
         audioFile,
+        videoMode,
       };
 
-      console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height);
+      console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
 
       const videoBlob = await videoComposerRef.current.createVideo(
         generatedImages,
@@ -263,16 +378,19 @@ const App: React.FC = () => {
       // Step 1: Analyze Audio
       setCurrentStep('analyzing');
       setProgress(5);
-      setStatusMessage(enableTranscription 
-        ? '🎤 Preparando transcrição com Web Speech API...'
+      const providerName = TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.name || '';
+      setStatusMessage(transcriptionProvider !== 'disabled'
+        ? `🎤 Transcrevendo com ${providerName}...`
         : '🎧 Analisando áudio...');
-      
+
       audioAnalyzerRef.current = new AudioAnalyzer();
-      
+
       const analysis = await audioAnalyzerRef.current.analyzeAudio(audioFile, {
-        transcribe: enableTranscription,
-        analyzeNarrative: enableTranscription,
-        useFilename: true  // ✅ Sempre usar nome do arquivo
+        transcribe: transcriptionProvider !== 'disabled' && transcriptionProvider !== 'filename',
+        analyzeNarrative: transcriptionProvider !== 'disabled',
+        useFilename: transcriptionProvider === 'filename' || transcriptionProvider !== 'disabled',
+        transcriptionProvider: transcriptionProvider,
+        transcriptionApiKey: transcriptionApiKey,
       });
       
       setAudioAnalysis(analysis);
@@ -303,9 +421,14 @@ const App: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
-      setStatusMessage('🎨 Criando prompts visuais...');
-      
-      imageGeneratorRef.current = new ImageGenerator();
+      setStatusMessage('Criando prompts visuais...');
+
+      // Usar provider configurado
+      const providerConfig: ProviderConfig = {
+        provider: selectedProvider,
+        apiKey: apiKeys[selectedProvider] || undefined,
+      };
+      imageGeneratorRef.current = new ImageGenerator(providerConfig);
       imageStorageRef.current = new ImageStorage();
       await imageStorageRef.current.init();
       
@@ -339,57 +462,27 @@ const App: React.FC = () => {
         setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
         
         try {
-          // Gerar todas as imagens do batch em paralelo
+          // Gerar todas as imagens do batch em paralelo (sem download - usa URL direta)
           const batchResults = await Promise.all(
             batch.map(async (imagePrompt, batchIndex) => {
               const globalIndex = batchStart + batchIndex;
-              
-              try {
-                const imageUrl = await imageGeneratorRef.current!.generateImage(
-                  imagePrompt.prompt,
-                  selectedTheme
-                );
-                
-                const blob = await imageStorageRef.current!.downloadImage(imageUrl);
-                
-                const storedImage: StoredImage = {
-                  id: `img-${Date.now()}-${globalIndex}`,
-                  url: imageUrl,
-                  blob,
-                  prompt: imagePrompt.prompt,
-                  timestamp: Date.now(),
-                  segmentIndex: globalIndex,
-                };
-                
-                await imageStorageRef.current!.saveImage(storedImage);
-                return storedImage;
-                
-              } catch (imgError) {
-                console.error(`Erro na imagem ${globalIndex + 1}:`, imgError);
-                
-                // ✅ RETRY uma vez em caso de 502
-                console.log(`🔄 Tentando novamente imagem ${globalIndex + 1}...`);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                const retryUrl = await imageGeneratorRef.current!.generateImage(
-                  imagePrompt.prompt,
-                  selectedTheme
-                );
-                
-                const retryBlob = await imageStorageRef.current!.downloadImage(retryUrl);
-                
-                const storedImage: StoredImage = {
-                  id: `img-${Date.now()}-${globalIndex}`,
-                  url: retryUrl,
-                  blob: retryBlob,
-                  prompt: imagePrompt.prompt,
-                  timestamp: Date.now(),
-                  segmentIndex: globalIndex,
-                };
-                
-                await imageStorageRef.current!.saveImage(storedImage);
-                return storedImage;
-              }
+
+              const imageUrl = await imageGeneratorRef.current!.generateImage(
+                imagePrompt.prompt,
+                selectedTheme
+              );
+
+              // Nao faz download - usa URL diretamente no <img>
+              const storedImage: StoredImage = {
+                id: `img-${Date.now()}-${globalIndex}`,
+                url: imageUrl,
+                prompt: imagePrompt.prompt,
+                timestamp: Date.now(),
+                segmentIndex: globalIndex,
+              };
+
+              await imageStorageRef.current!.saveImage(storedImage);
+              return storedImage;
             })
           );
           
@@ -434,15 +527,16 @@ const App: React.FC = () => {
       
       setStatusMessage('🎬 Renderizando vídeo...');
       
-      // ✅ CORREÇÃO: Usar aspectRatio corretamente
+      // Usar aspectRatio e videoMode corretamente
       const videoOptions: VideoOptions = {
-        fps: 30,
-        width: aspectRatio === '9:16' ? 720 : 1280,   // ✅ CORRIGIDO
-        height: aspectRatio === '9:16' ? 1280 : 720,  // ✅ CORRIGIDO
+        fps: 24,
+        width: aspectRatio === '9:16' ? 720 : 1280,
+        height: aspectRatio === '9:16' ? 1280 : 720,
         audioFile,
+        videoMode,
       };
-      
-      console.log('📐 Formato do vídeo:', videoOptions.width, 'x', videoOptions.height);
+
+      console.log('📐 Formato do vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
       
       const videoBlob = await videoComposerRef.current.createVideo(
         images,
@@ -510,6 +604,121 @@ const App: React.FC = () => {
       await imageStorageRef.current.clearAll();
       setGeneratedImages([]);
     }
+  };
+
+  // Re-gerar imagem com novo prompt
+  const handleRegenerateImage = async (id: string, newPrompt: string) => {
+    if (!imageGeneratorRef.current) {
+      imageGeneratorRef.current = new ImageGenerator({
+        provider: selectedProvider,
+        apiKey: apiKeys[selectedProvider] || undefined,
+      });
+    }
+
+    try {
+      setStatusMessage('Re-gerando imagem...');
+
+      // Gerar nova imagem
+      const newUrl = await imageGeneratorRef.current.generateImage(newPrompt, selectedTheme);
+
+      // Atualizar imagem no estado
+      setGeneratedImages(prev => prev.map(img => {
+        if (img.id === id) {
+          return { ...img, url: newUrl, prompt: newPrompt };
+        }
+        return img;
+      }));
+
+      // Atualizar no storage
+      if (imageStorageRef.current) {
+        const existingImg = generatedImages.find(img => img.id === id);
+        if (existingImg) {
+          await imageStorageRef.current.saveImage({
+            ...existingImg,
+            url: newUrl,
+            prompt: newPrompt,
+          });
+        }
+      }
+
+      setStatusMessage('Imagem re-gerada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao re-gerar imagem:', error);
+      setError('Erro ao re-gerar imagem. Tente novamente.');
+    }
+  };
+
+  // Upload de imagem local
+  const handleUploadImage = async (file: File, index: number) => {
+    try {
+      // Converter arquivo para URL
+      const url = URL.createObjectURL(file);
+
+      // Se ja existe uma imagem nesse index, substituir
+      const existingImg = generatedImages.find(img => img.segmentIndex === index);
+
+      if (existingImg) {
+        // Substituir imagem existente
+        setGeneratedImages(prev => prev.map(img => {
+          if (img.segmentIndex === index) {
+            return { ...img, url, prompt: `Upload: ${file.name}` };
+          }
+          return img;
+        }));
+
+        if (imageStorageRef.current) {
+          await imageStorageRef.current.saveImage({
+            ...existingImg,
+            url,
+            prompt: `Upload: ${file.name}`,
+          });
+        }
+      } else {
+        // Adicionar nova imagem
+        const newImage: StoredImage = {
+          id: `upload-${Date.now()}`,
+          url,
+          prompt: `Upload: ${file.name}`,
+          timestamp: Date.now(),
+          segmentIndex: index,
+        };
+
+        setGeneratedImages(prev => [...prev, newImage].sort((a, b) => a.segmentIndex - b.segmentIndex));
+
+        if (imageStorageRef.current) {
+          await imageStorageRef.current.saveImage(newImage);
+        }
+      }
+
+      setStatusMessage('Imagem adicionada!');
+    } catch (error) {
+      console.error('Erro ao fazer upload:', error);
+      setError('Erro ao fazer upload da imagem.');
+    }
+  };
+
+  // Atualizar animacao de uma imagem
+  const handleUpdateAnimation = async (id: string, animationType: string) => {
+    setGeneratedImages(prev => prev.map(img => {
+      if (img.id === id) {
+        return { ...img, animationType: animationType as any };
+      }
+      return img;
+    }));
+
+    // Salvar no storage
+    if (imageStorageRef.current) {
+      const existingImg = generatedImages.find(img => img.id === id);
+      if (existingImg) {
+        await imageStorageRef.current.saveImage({
+          ...existingImg,
+          animationType: animationType as any,
+        });
+      }
+    }
+
+    const animName = animationType === 'none' ? 'Sem animação' : animationType;
+    setStatusMessage(`Animação definida: ${animName}`);
   };
 
   const currentTheme = THEMES[selectedTheme];
@@ -690,41 +899,89 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Transcription Toggle */}
+            {/* Transcription Provider Selector */}
             <div style={{
-              background: '#f0f4ff',
-              padding: '16px',
+              background: '#ecfdf5',
+              padding: '20px',
               borderRadius: '12px',
               marginBottom: '30px',
-              border: '2px solid #667eea',
+              border: '2px solid #10b981',
             }}>
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                cursor: 'pointer',
+              <h4 style={{ margin: '0 0 12px 0', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>🎤</span> Transcricao de Audio
+              </h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '10px',
+                marginBottom: '12px',
               }}>
-                <input
-                  type="checkbox"
-                  checked={enableTranscription}
-                  onChange={(e) => setEnableTranscription(e.target.checked)}
-                  style={{
-                    width: '20px',
-                    height: '20px',
-                    marginRight: '12px',
-                    cursor: 'pointer',
-                  }}
-                />
-                <div>
-                  <strong>🎤 Transcrever com Web Speech API (Chrome/Edge)</strong>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '14px', color: '#666' }}>
-                    100% grátis! O navegador transcreve a letra e detecta a história.
-                  </p>
+                {TRANSCRIPTION_PROVIDERS.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setTranscriptionProvider(p.id)}
+                    style={{
+                      padding: '12px 8px',
+                      border: `2px solid ${transcriptionProvider === p.id ? '#047857' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: transcriptionProvider === p.id ? '#d1fae5' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '18px', marginBottom: '4px' }}>{p.icon}</div>
+                    <div style={{ fontWeight: transcriptionProvider === p.id ? 'bold' : 'normal', fontSize: '12px' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {p.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.needsKey && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="password"
+                    placeholder={`API Key para ${TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.name}`}
+                    value={transcriptionApiKey}
+                    onChange={(e) => setTranscriptionApiKey(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  />
+                  <button
+                    onClick={handleSaveTranscriptionConfig}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#047857',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Salvar
+                  </button>
                 </div>
-              </label>
+              )}
+
+              {transcriptionProvider === 'groq' && (
+                <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#047857' }}>
+                  <strong>Groq Whisper:</strong> Obtenha sua API key gratuita em <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: '#047857' }}>console.groq.com</a>
+                </p>
+              )}
             </div>
 
             <h3 style={{ color: '#333' }}>2. Formato do vídeo</h3>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
               <button
                 onClick={() => setAspectRatio('16:9')}
                 style={{
@@ -757,7 +1014,33 @@ const App: React.FC = () => {
               </button>
             </div>
 
-            <h3 style={{ color: '#333' }}>3. Tema visual</h3>
+            {/* Modo de Video */}
+            <h3 style={{ color: '#333' }}>3. Modo do vídeo</h3>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
+              {VIDEO_MODES.map(mode => (
+                <button
+                  key={mode.id}
+                  onClick={() => setVideoMode(mode.id)}
+                  style={{
+                    flex: 1,
+                    minWidth: '150px',
+                    padding: '16px',
+                    border: `2px solid ${videoMode === mode.id ? '#667eea' : '#ddd'}`,
+                    borderRadius: '8px',
+                    background: videoMode === mode.id ? '#f0f4ff' : 'white',
+                    cursor: 'pointer',
+                    fontWeight: videoMode === mode.id ? 'bold' : 'normal',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{mode.icon}</div>
+                  <div style={{ fontWeight: 'bold' }}>{mode.name}</div>
+                  <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{mode.description}</div>
+                </button>
+              ))}
+            </div>
+
+            <h3 style={{ color: '#333' }}>4. Tema visual</h3>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
@@ -784,12 +1067,170 @@ const App: React.FC = () => {
               ))}
             </div>
 
+            {/* 5. Configuracoes de API */}
+            <h3 style={{ color: '#333' }}>5. Configuracoes de API</h3>
+
+            {/* Gerador de Imagens */}
+            <div style={{
+              background: '#f0f8ff',
+              padding: '20px',
+              borderRadius: '12px',
+              marginBottom: '16px',
+              border: '2px solid #e0e7ff',
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>🖼️</span> Gerador de Imagens
+              </h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '10px',
+                marginBottom: '12px',
+              }}>
+                {IMAGE_PROVIDERS.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedProvider(p.id)}
+                    style={{
+                      padding: '12px 8px',
+                      border: `2px solid ${selectedProvider === p.id ? '#4f46e5' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedProvider === p.id ? '#e0e7ff' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontWeight: selectedProvider === p.id ? 'bold' : 'normal', fontSize: '13px' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {p.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.needsKey && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="password"
+                    placeholder={`API Key para ${IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.name}`}
+                    value={apiKeys[selectedProvider]}
+                    onChange={(e) => setApiKeys(prev => ({ ...prev, [selectedProvider]: e.target.value }))}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  />
+                  <button
+                    onClick={handleSaveConfig}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#4f46e5',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Salvar
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Gerador de Video */}
+            <div style={{
+              background: '#fef3c7',
+              padding: '20px',
+              borderRadius: '12px',
+              marginBottom: '30px',
+              border: '2px solid #fcd34d',
+            }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#b45309', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>🎬</span> Gerador de Video
+              </h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '10px',
+                marginBottom: '12px',
+              }}>
+                {VIDEO_PROVIDERS.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelectedVideoProvider(p.id)}
+                    style={{
+                      padding: '12px 8px',
+                      border: `2px solid ${selectedVideoProvider === p.id ? '#b45309' : '#ddd'}`,
+                      borderRadius: '8px',
+                      background: selectedVideoProvider === p.id ? '#fde68a' : 'white',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div style={{ fontSize: '18px', marginBottom: '4px' }}>{p.icon}</div>
+                    <div style={{ fontWeight: selectedVideoProvider === p.id ? 'bold' : 'normal', fontSize: '12px' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                      {p.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.needsKey && (
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="password"
+                    placeholder={`API Key para ${VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name}`}
+                    value={videoApiKeys[selectedVideoProvider]}
+                    onChange={(e) => setVideoApiKeys(prev => ({ ...prev, [selectedVideoProvider]: e.target.value }))}
+                    style={{
+                      flex: 1,
+                      padding: '10px 12px',
+                      border: '2px solid #ddd',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  />
+                  <button
+                    onClick={handleSaveVideoConfig}
+                    style={{
+                      padding: '10px 16px',
+                      background: '#b45309',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Salvar
+                  </button>
+                </div>
+              )}
+
+              {selectedVideoProvider !== 'local' && (
+                <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#92400e', background: '#fef3c7', padding: '8px', borderRadius: '6px' }}>
+                  <strong>Nota:</strong> APIs de video com IA (RunwayML, Luma, Stability) geram videos a partir de imagens usando inteligencia artificial avancada. Requer assinatura do servico.
+                </p>
+              )}
+            </div>
+
             <button
               onClick={handleStartGeneration}
               disabled={!audioFile}
               style={{
                 width: '100%',
-                padding: '18px',
+                padding: '20px',
                 background: audioFile ? currentTheme.gradient : '#ccc',
                 color: 'white',
                 border: 'none',
@@ -800,7 +1241,16 @@ const App: React.FC = () => {
                 boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none',
               }}
             >
-              {audioFile ? '🚀 Criar Vídeo (com Auto-Save)' : '⏸️ Selecione um áudio'}
+              {audioFile ? (
+                <>
+                  <div>Criar Video</div>
+                  <div style={{ fontSize: '12px', fontWeight: 'normal', marginTop: '4px', opacity: 0.9 }}>
+                    Imagens: {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.name} |
+                    Video: {VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name} |
+                    Modo: {VIDEO_MODES.find(m => m.id === videoMode)?.name}
+                  </div>
+                </>
+              ) : 'Selecione um audio'}
             </button>
           </div>
         )}
@@ -888,8 +1338,8 @@ const App: React.FC = () => {
               {progress.toFixed(0)}% • {generatedImages.length} imagens salvas
             </p>
 
-            {/* ✅ NOVO: Botão para criar vídeo quando recupera checkpoint */}
-            {currentStep === 'composing' && progress === 75 && generatedImages.length > 0 && !videoUrl && (
+            {/* Botao para criar video - aparece quando tem imagens e nao tem video */}
+            {generatedImages.length > 0 && !videoUrl && currentStep !== 'done' && (
               <button
                 onClick={handleCreateVideoFromRecovered}
                 style={{
@@ -909,7 +1359,7 @@ const App: React.FC = () => {
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
               >
-                🎬 Criar Vídeo Agora ({generatedImages.length} imagens prontas)
+                Criar Video Agora ({generatedImages.length} imagens prontas)
               </button>
             )}
 
@@ -939,6 +1389,9 @@ const App: React.FC = () => {
                   images={generatedImages}
                   onDelete={handleDeleteImage}
                   onClearAll={handleClearAllImages}
+                  onRegenerate={handleRegenerateImage}
+                  onUpload={handleUploadImage}
+                  onUpdateAnimation={handleUpdateAnimation}
                 />
               </div>
             )}
@@ -999,6 +1452,9 @@ const App: React.FC = () => {
                   images={generatedImages}
                   onDelete={handleDeleteImage}
                   onClearAll={handleClearAllImages}
+                  onRegenerate={handleRegenerateImage}
+                  onUpload={handleUploadImage}
+                  onUpdateAnimation={handleUpdateAnimation}
                 />
               </div>
             )}

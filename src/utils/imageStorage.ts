@@ -1,12 +1,15 @@
 import { openDB, type IDBPDatabase } from 'idb';
 
+export type AnimationType = 'zoomIn' | 'zoomOut' | 'panLeft' | 'panRight' | 'panUp' | 'panDown' | 'zoomInRotate' | 'kenBurnsClassic' | 'none';
+
 export interface StoredImage {
   id: string;
   url: string;
-  blob: Blob;
+  blob?: Blob;
   prompt: string;
   timestamp: number;
   segmentIndex: number;
+  animationType?: AnimationType;
 }
 
 const DB_NAME = 'tonmoves-images';
