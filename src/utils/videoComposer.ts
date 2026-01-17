@@ -556,7 +556,7 @@ export class VideoComposer {
               ? images[i].animationType as AnimationType
               : getAnimationType(i);
 
-          const zoompanFilter = this.getZoomPanFilter(animationType, DURATION_PER_IMAGE, fps);
+          const zoompanFilter = this.getZoomPanFilter(animationType, DURATION_PER_IMAGE, fps, width, height);
           
           filterComplex.push(`[${i}:v]scale=${width}*2:-1,${zoompanFilter},trim=duration=${DURATION_PER_IMAGE},setpts=PTS-STARTPTS[v${i}]`);
           outputStreams += `[v${i}]`;
@@ -649,7 +649,7 @@ export class VideoComposer {
   }
 
   // NOVO: Gera a string do filtro zoompan
-  private getZoomPanFilter(animationType: AnimationType, duration: number, fps: number): string {
+  private getZoomPanFilter(animationType: AnimationType, duration: number, fps: number, width: number, height: number): string {
     const totalFrames = Math.ceil(duration * fps);
     const zoomAmount = 1.5; // Zoom máximo de 150%
     let zoomExpr = "'1'";
@@ -687,7 +687,7 @@ export class VideoComposer {
         break;
     }
 
-    return `zoompan=z=${zoomExpr}:x=${xExpr}:y=${yExpr}:d=${totalFrames}:s=${options.width}x${options.height}:fps=${fps}`;
+    return `zoompan=z=${zoomExpr}:x=${xExpr}:y=${yExpr}:d=${totalFrames}:s=${width}x${height}:fps=${fps}`;
   }
 
   private async getAudioDuration(audioFile: File): Promise<number> {
