@@ -1,43 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AudioAnalyzer, type AudioAnalysis, type NarrativeAnalysis } from './utils/audioAnalyzer';
-import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ImageProvider, type ProviderConfig } from './utils/imageGenerator';
+import { ImageGenerator, type ImagePrompt, type Theme, type GlobalContext, type ProviderConfig } from './utils/imageGenerator';
 import { ImageStorage, type StoredImage } from './utils/imageStorage';
 import { VideoComposer, type VideoOptions, type VideoMode } from './utils/videoComposer';
 import { ImageGallery } from './components/ImageGallery';
 import { CheckpointManager, type Checkpoint } from './utils/checkpointManager';
+import { Sidebar } from './components/layout/Sidebar';
+import { Settings, IMAGE_PROVIDERS, VIDEO_PROVIDERS, TRANSCRIPTION_PROVIDERS } from './components/Settings';
 
-type AspectRatio = '16:9' | '9:16';
-type Step = 'upload' | 'analyzing' | 'generating' | 'composing' | 'done';
-type VideoProvider = 'local' | 'pexels' | 'runwayml' | 'lumaai' | 'stability';
+export type AspectRatio = '16:9' | '9:16';
+export type Step = 'upload' | 'analyzing' | 'generating' | 'composing' | 'done';
+export type CurrentView = 'main' | 'settings';
+
+// Definir os tipos de provedores de vídeo e transcrição aqui para uso global
+export type VideoProvider = 'local' | 'pexels' | 'runwayml' | 'lumaai' | 'stability';
+export type TranscriptionProvider = 'disabled' | 'filename' | 'groq' | 'openai';
 
 const VIDEO_MODES: { id: VideoMode; name: string; description: string; icon: string }[] = [
   { id: 'slideshow', name: 'Slideshow', description: '1 imagem a cada 3-5 segundos', icon: '🖼️' },
   { id: 'animated', name: 'Animado', description: 'Menos imagens com zoom/pan', icon: '🎬' },
-];
-
-const IMAGE_PROVIDERS: { id: ImageProvider; name: string; needsKey: boolean; description: string }[] = [
-  { id: 'pollinations', name: 'Pollinations', needsKey: false, description: 'IA gratuita, sem limite, mais lento' },
-  { id: 'pexels', name: 'Pexels', needsKey: true, description: 'Fotos reais HD, gratuito com API key' },
-  { id: 'together', name: 'Together AI', needsKey: true, description: 'IA rapida, modelo FLUX.1, pago' },
-  { id: 'openai', name: 'OpenAI DALL-E 3', needsKey: true, description: 'IA alta qualidade, pago' },
-  { id: 'gemini', name: 'Google Gemini', needsKey: true, description: 'IA Imagen 3, pago' },
-];
-
-const VIDEO_PROVIDERS: { id: VideoProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
-  { id: 'local', name: 'Local (FFmpeg)', needsKey: false, description: 'Gratuito, processa no navegador', icon: '💻' },
-  { id: 'pexels', name: 'Pexels Videos', needsKey: true, description: 'Videos reais HD, gratuito com API key', icon: '📹' },
-  { id: 'runwayml', name: 'RunwayML Gen-3', needsKey: true, description: 'IA geradora de video de alta qualidade', icon: '🎥' },
-  { id: 'lumaai', name: 'Luma Dream Machine', needsKey: true, description: 'Videos cinematograficos com IA', icon: '🌙' },
-  { id: 'stability', name: 'Stability AI', needsKey: true, description: 'Stable Video Diffusion', icon: '🎞️' },
-];
-
-type TranscriptionProvider = 'disabled' | 'filename' | 'groq' | 'openai';
-
-const TRANSCRIPTION_PROVIDERS: { id: TranscriptionProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
-  { id: 'filename', name: 'Nome do Arquivo', needsKey: false, description: 'Extrai contexto do nome do arquivo (gratis)', icon: '📄' },
-  { id: 'groq', name: 'Groq Whisper', needsKey: true, description: 'Whisper gratuito, rapido e preciso', icon: '⚡' },
-  { id: 'openai', name: 'OpenAI Whisper', needsKey: true, description: 'Whisper original, muito preciso (~$0.006/min)', icon: '🎯' },
-  { id: 'disabled', name: 'Desativado', needsKey: false, description: 'Nao transcrever, usar apenas analise de audio', icon: '🔇' },
 ];
 
 interface ThemeConfig {
@@ -48,42 +29,12 @@ interface ThemeConfig {
 }
 
 const THEMES: Record<Theme, ThemeConfig> = {
-  cinematic: {
-    name: 'Cinematic',
-    emoji: '🎬',
-    description: 'Cinematográfico dramático',
-    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  },
-  neon: {
-    name: 'Neon',
-    emoji: '💜',
-    description: 'Cyberpunk futurista',
-    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-  },
-  nature: {
-    name: 'Nature',
-    emoji: '🌿',
-    description: 'Natureza orgânica',
-    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  },
-  abstract: {
-    name: 'Abstract',
-    emoji: '🎨',
-    description: 'Arte moderna',
-    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  },
-  minimal: {
-    name: 'Minimal',
-    emoji: '⚪',
-    description: 'Minimalista elegante',
-    gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-  },
-  baby: {
-    name: 'Baby',
-    emoji: '👶',
-    description: 'Super colorido e fofo',
-    gradient: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-  },
+  cinematic: { name: 'Cinematic', emoji: '🎬', description: 'Cinematográfico dramático', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
+  neon: { name: 'Neon', emoji: '💜', description: 'Cyberpunk futurista', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
+  nature: { name: 'Nature', emoji: '🌿', description: 'Natureza orgânica', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
+  abstract: { name: 'Abstract', emoji: '🎨', description: 'Arte moderna', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
+  minimal: { name: 'Minimal', emoji: '⚪', description: 'Minimalista elegante', gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
+  baby: { name: 'Baby', emoji: '👶', description: 'Super colorido e fofo', gradient: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)' },
 };
 
 const App: React.FC = () => {
@@ -92,8 +43,19 @@ const App: React.FC = () => {
   const [selectedTheme, setSelectedTheme] = useState<Theme>('baby');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('9:16');
   const [videoMode, setVideoMode] = useState<VideoMode>('slideshow');
+  
+  // States de configuração de API (movidos para Settings, mas os estados são mantidos aqui e passados como props)
   const [transcriptionProvider, setTranscriptionProvider] = useState<TranscriptionProvider>('filename');
   const [transcriptionApiKey, setTranscriptionApiKey] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState<ImageProvider>('pollinations');
+  const [apiKeys, setApiKeys] = useState<Record<ImageProvider, string>>({
+    pollinations: '', pexels: '', together: '', openai: '', gemini: '',
+  });
+  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('local');
+  const [videoApiKeys, setVideoApiKeys] = useState<Record<VideoProvider, string>>({
+    local: '', pexels: '', runwayml: '', lumaai: '', stability: '',
+  });
+
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
@@ -104,27 +66,10 @@ const App: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasCheckpoint, setHasCheckpoint] = useState(false);
-
-  // Provider de imagem
-  const [showConfig, setShowConfig] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<ImageProvider>('pollinations');
-  const [apiKeys, setApiKeys] = useState<Record<ImageProvider, string>>({
-    pollinations: '',
-    pexels: '',
-    together: '',
-    openai: '',
-    gemini: '',
-  });
-
-  // Provider de video
-  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('local');
-  const [videoApiKeys, setVideoApiKeys] = useState<Record<VideoProvider, string>>({
-    local: '',
-    pexels: '',
-    runwayml: '',
-    lumaai: '',
-    stability: '',
-  });
+  
+  // UI State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<CurrentView>('main');
 
   // Carregar config salva
   useEffect(() => {
@@ -133,34 +78,21 @@ const App: React.FC = () => {
     if (savedConfig.apiKey) {
       setApiKeys(prev => ({ ...prev, [savedConfig.provider]: savedConfig.apiKey || '' }));
     }
-    // Carregar todas as keys de imagem salvas
     try {
       const savedKeys = localStorage.getItem('tonmoves_api_keys');
-      if (savedKeys) {
-        setApiKeys(JSON.parse(savedKeys));
-      }
+      if (savedKeys) setApiKeys(JSON.parse(savedKeys));
     } catch {}
-    // Carregar keys de video salvas
     try {
       const savedVideoKeys = localStorage.getItem('tonmoves_video_api_keys');
-      if (savedVideoKeys) {
-        setVideoApiKeys(JSON.parse(savedVideoKeys));
-      }
+      if (savedVideoKeys) setVideoApiKeys(JSON.parse(savedVideoKeys));
       const savedVideoProvider = localStorage.getItem('tonmoves_video_provider');
-      if (savedVideoProvider) {
-        setSelectedVideoProvider(savedVideoProvider as VideoProvider);
-      }
+      if (savedVideoProvider) setSelectedVideoProvider(savedVideoProvider as VideoProvider);
     } catch {}
-    // Carregar config de transcricao
     try {
       const savedTranscriptionProvider = localStorage.getItem('tonmoves_transcription_provider');
-      if (savedTranscriptionProvider) {
-        setTranscriptionProvider(savedTranscriptionProvider as TranscriptionProvider);
-      }
+      if (savedTranscriptionProvider) setTranscriptionProvider(savedTranscriptionProvider as TranscriptionProvider);
       const savedTranscriptionKey = localStorage.getItem('tonmoves_transcription_key');
-      if (savedTranscriptionKey) {
-        setTranscriptionApiKey(savedTranscriptionKey);
-      }
+      if (savedTranscriptionKey) setTranscriptionApiKey(savedTranscriptionKey);
     } catch {}
   }, []);
 
@@ -172,18 +104,21 @@ const App: React.FC = () => {
     };
     ImageGenerator.saveConfig(config);
     localStorage.setItem('tonmoves_api_keys', JSON.stringify(apiKeys));
+    alert('Configurações salvas!');
   };
 
   // Salvar config de video
   const handleSaveVideoConfig = () => {
     localStorage.setItem('tonmoves_video_api_keys', JSON.stringify(videoApiKeys));
     localStorage.setItem('tonmoves_video_provider', selectedVideoProvider);
+    alert('Configurações salvas!');
   };
 
   // Salvar config de transcricao
   const handleSaveTranscriptionConfig = () => {
     localStorage.setItem('tonmoves_transcription_provider', transcriptionProvider);
     localStorage.setItem('tonmoves_transcription_key', transcriptionApiKey);
+    alert('Configurações salvas!');
   };
 
   // Refs
@@ -194,72 +129,46 @@ const App: React.FC = () => {
   const videoComposerRef = useRef<VideoComposer | null>(null);
   const checkpointManagerRef = useRef<CheckpointManager | null>(null);
 
-  // ✅ Inicializar checkpoint manager
   useEffect(() => {
     checkpointManagerRef.current = new CheckpointManager();
     checkRecovery();
   }, []);
 
-  // ✅ Verificar se tem checkpoint para recuperar
   const checkRecovery = async () => {
     if (!checkpointManagerRef.current) return;
-    
     const hasRecent = await checkpointManagerRef.current.hasRecentCheckpoint();
     setHasCheckpoint(hasRecent);
   };
 
-  // ✅ Recuperar progresso anterior
   const handleRecoverProgress = async () => {
     if (!checkpointManagerRef.current) return;
-
     const checkpoint = await checkpointManagerRef.current.loadCheckpoint();
     if (!checkpoint) return;
 
-    // Restaurar estado
     setProgress(checkpoint.progress);
     setCurrentStep(checkpoint.step as Step);
-    
-    if (checkpoint.data.audioAnalysis) {
-      setAudioAnalysis(checkpoint.data.audioAnalysis);
-    }
-    if (checkpoint.data.globalContext) {
-      setGlobalContext(checkpoint.data.globalContext);
-    }
-    if (checkpoint.data.narrative) {
-      setNarrative(checkpoint.data.narrative);
-    }
+    if (checkpoint.data.audioAnalysis) setAudioAnalysis(checkpoint.data.audioAnalysis);
+    if (checkpoint.data.globalContext) setGlobalContext(checkpoint.data.globalContext);
+    if (checkpoint.data.narrative) setNarrative(checkpoint.data.narrative);
     if (checkpoint.data.generatedImages) {
       setGeneratedImages(checkpoint.data.generatedImages);
-      
-      // ✅ Se tem imagens prontas, ir direto para composição
       if (checkpoint.step === 'images-complete' || checkpoint.progress >= 75) {
         setCurrentStep('composing');
         setStatusMessage('📂 Imagens recuperadas! Pronto para criar vídeo.');
       }
     }
-    if (checkpoint.data.aspectRatio) {
-      setAspectRatio(checkpoint.data.aspectRatio as AspectRatio);
-    }
-    if (checkpoint.data.theme) {
-      setSelectedTheme(checkpoint.data.theme as Theme);
-    }
+    if (checkpoint.data.aspectRatio) setAspectRatio(checkpoint.data.aspectRatio as AspectRatio);
+    if (checkpoint.data.theme) setSelectedTheme(checkpoint.data.theme as Theme);
 
     setStatusMessage('📂 Progresso recuperado! Continuando de onde parou...');
     setHasCheckpoint(false);
   };
 
-  // ✅ Salvar checkpoint automaticamente
   const saveCheckpoint = async (step: string, prog: number) => {
     if (!checkpointManagerRef.current) return;
-
     await checkpointManagerRef.current.autoSave(step, prog, {
-      audioAnalysis,
-      globalContext,
-      narrative,
-      generatedImages,
-      aspectRatio,
-      theme: selectedTheme,
-      audioFileName: audioFile?.name
+      audioAnalysis, globalContext, narrative, generatedImages,
+      aspectRatio, theme: selectedTheme, audioFileName: audioFile?.name
     });
   };
 
@@ -278,15 +187,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); };
   const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
+    e.preventDefault(); e.stopPropagation();
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('audio/')) {
       setAudioFile(file);
@@ -296,66 +199,37 @@ const App: React.FC = () => {
     }
   };
 
-  // ✅ NOVO: Criar vídeo a partir de imagens recuperadas
   const handleCreateVideoFromRecovered = async () => {
-    if (generatedImages.length === 0) {
-      setError('Nenhuma imagem encontrada para criar vídeo');
-      return;
-    }
-
-    if (!audioFile) {
-      setError('Arquivo de áudio não encontrado. Faça upload novamente.');
-      return;
-    }
-
+    if (generatedImages.length === 0) { setError('Nenhuma imagem encontrada para criar vídeo'); return; }
+    if (!audioFile) { setError('Arquivo de áudio não encontrado. Faça upload novamente.'); return; }
     try {
       setError(null);
       setCurrentStep('composing');
       setProgress(75);
       setStatusMessage('🎬 Criando vídeo com as imagens recuperadas...');
-
       videoComposerRef.current = new VideoComposer();
       await videoComposerRef.current.load((p) => {
         setProgress(75 + (p / 100) * 20);
-        if (p % 20 === 0) {
-          setStatusMessage(`🎬 Carregando FFmpeg... ${p}%`);
-        }
+        if (p % 20 === 0) setStatusMessage(`🎬 Carregando FFmpeg... ${p}%`);
       });
-
       setStatusMessage('🎬 Renderizando vídeo...');
-
       const videoOptions: VideoOptions = {
         fps: 24,
         width: aspectRatio === '9:16' ? 720 : 1280,
         height: aspectRatio === '9:16' ? 1280 : 720,
-        audioFile,
-        videoMode,
+        audioFile, videoMode,
       };
-
       console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
-
-      const videoBlob = await videoComposerRef.current.createVideo(
-        generatedImages,
-        videoOptions,
-        (p) => {
-          setProgress(75 + 20 + (p / 100) * 5);
-          if (p % 25 === 0) {
-            setStatusMessage(`🎬 Renderizando... ${p}%`);
-          }
-        }
-      );
-
+      const videoBlob = await videoComposerRef.current.createVideo(generatedImages, videoOptions, (p) => {
+        setProgress(75 + 20 + (p / 100) * 5);
+        if (p % 25 === 0) setStatusMessage(`🎬 Renderizando... ${p}%`);
+      });
       const videoObjectUrl = URL.createObjectURL(videoBlob);
       setVideoUrl(videoObjectUrl);
-
       setProgress(100);
       setCurrentStep('done');
       setStatusMessage('✅ Vídeo criado com sucesso!');
-
-      if (checkpointManagerRef.current) {
-        await checkpointManagerRef.current.clearCheckpoint();
-      }
-
+      if (checkpointManagerRef.current) await checkpointManagerRef.current.clearCheckpoint();
     } catch (err) {
       console.error('Erro ao criar vídeo:', err);
       setError(err instanceof Error ? err.message : 'Erro ao criar vídeo');
@@ -364,27 +238,15 @@ const App: React.FC = () => {
   };
 
   const handleStartGeneration = async () => {
-    if (!audioFile) {
-      setError('Selecione um arquivo de áudio primeiro');
-      return;
-    }
-
+    if (!audioFile) { setError('Selecione um arquivo de áudio primeiro'); return; }
     try {
       setError(null);
-      
-      // ✅ CHECKPOINT 1: Início
       await saveCheckpoint('starting', 0);
-      
-      // Step 1: Analyze Audio
       setCurrentStep('analyzing');
       setProgress(5);
       const providerName = TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.name || '';
-      setStatusMessage(transcriptionProvider !== 'disabled'
-        ? `🎤 Transcrevendo com ${providerName}...`
-        : '🎧 Analisando áudio...');
-
+      setStatusMessage(transcriptionProvider !== 'disabled' ? `🎤 Transcrevendo com ${providerName}...` : '🎧 Analisando áudio...');
       audioAnalyzerRef.current = new AudioAnalyzer();
-
       const analysis = await audioAnalyzerRef.current.analyzeAudio(audioFile, {
         transcribe: transcriptionProvider !== 'disabled' && transcriptionProvider !== 'filename',
         analyzeNarrative: transcriptionProvider !== 'disabled',
@@ -392,115 +254,54 @@ const App: React.FC = () => {
         transcriptionProvider: transcriptionProvider,
         transcriptionApiKey: transcriptionApiKey,
       });
-      
       setAudioAnalysis(analysis);
-      if (analysis.narrative) {
-        setNarrative(analysis.narrative);
-      }
-      
-      // ✅ CHECKPOINT 2: Áudio analisado
+      if (analysis.narrative) setNarrative(analysis.narrative);
       setProgress(20);
       await saveCheckpoint('analyzed', 20);
-      
-      if (analysis.fullTranscription) {
-        setStatusMessage(`✅ História: "${analysis.narrative?.story || 'Narrativa detectada'}"`);
-      } else if (analysis.narrative) {
-        setStatusMessage(`✅ Contexto: ${analysis.narrative.story}`);
-      } else {
-        setStatusMessage(`✅ Áudio analisado: ${analysis.segments.length} cenas`);
-      }
-      
+      if (analysis.fullTranscription) setStatusMessage(`✅ História: "${analysis.narrative?.story || 'Narrativa detectada'}"`);
+      else if (analysis.narrative) setStatusMessage(`✅ Contexto: ${analysis.narrative.story}`);
+      else setStatusMessage(`✅ Áudio analisado: ${analysis.segments.length} cenas`);
       await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Step 2: Generate Images
       setCurrentStep('generating');
       setProgress(25);
-      
       if (analysis.narrative) {
         setStatusMessage(`📖 Personagens: ${analysis.narrative.characters.join(', ')}`);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
       setStatusMessage('Criando prompts visuais...');
-
-      // Usar provider configurado
-      const providerConfig: ProviderConfig = {
-        provider: selectedProvider,
-        apiKey: apiKeys[selectedProvider] || undefined,
-      };
+      const providerConfig: ProviderConfig = { provider: selectedProvider, apiKey: apiKeys[selectedProvider] || undefined };
       imageGeneratorRef.current = new ImageGenerator(providerConfig);
       imageStorageRef.current = new ImageStorage();
       await imageStorageRef.current.init();
-      
-      const prompts = await imageGeneratorRef.current.generatePrompts(
-        analysis.segments,
-        audioFile.name.replace(/\.[^/.]+$/, ''),
-        selectedTheme,
-        analysis
-      );
-      
-      if (prompts[0]?.globalContext) {
-        setGlobalContext(prompts[0].globalContext);
-      }
-      
-      // ✅ CHECKPOINT 3: Prompts criados
+      const prompts = await imageGeneratorRef.current.generatePrompts(analysis.segments, audioFile.name.replace(/\.[^/.]+$/, ''), selectedTheme, analysis);
+      if (prompts[0]?.globalContext) setGlobalContext(prompts[0].globalContext);
       setProgress(30);
       await saveCheckpoint('prompts-created', 30);
-      
       setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
-      
       const images: StoredImage[] = [];
-      
-      // ✅ GERAÇÃO PARALELA CONTROLADA - 2 imagens por vez + delay
       const BATCH_SIZE = 2;
-      const DELAY_BETWEEN_BATCHES = 500; // 500ms entre batches
-      
+      const DELAY_BETWEEN_BATCHES = 500;
       for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
         const batch = prompts.slice(batchStart, batchEnd);
-        
         setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
-        
         try {
-          // Gerar todas as imagens do batch em paralelo (sem download - usa URL direta)
-          const batchResults = await Promise.all(
-            batch.map(async (imagePrompt, batchIndex) => {
-              const globalIndex = batchStart + batchIndex;
-
-              const imageUrl = await imageGeneratorRef.current!.generateImage(
-                imagePrompt.prompt,
-                selectedTheme
-              );
-
-              // Nao faz download - usa URL diretamente no <img>
-              const storedImage: StoredImage = {
-                id: `img-${Date.now()}-${globalIndex}`,
-                url: imageUrl,
-                prompt: imagePrompt.prompt,
-                timestamp: Date.now(),
-                segmentIndex: globalIndex,
-              };
-
-              await imageStorageRef.current!.saveImage(storedImage);
-              return storedImage;
-            })
-          );
-          
-          // Adicionar todas as imagens do batch
+          const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
+            const globalIndex = batchStart + batchIndex;
+            const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
+            const storedImage: StoredImage = {
+              id: `img-${Date.now()}-${globalIndex}`, url: imageUrl, prompt: imagePrompt.prompt,
+              timestamp: Date.now(), segmentIndex: globalIndex,
+            };
+            await imageStorageRef.current!.saveImage(storedImage);
+            return storedImage;
+          }));
           images.push(...batchResults);
           setGeneratedImages([...images]);
-          
           const imgProgress = 30 + (images.length / prompts.length) * 45;
           setProgress(imgProgress);
-          
-          // ✅ CHECKPOINT após cada batch
           await saveCheckpoint(`batch-${batchEnd}`, imgProgress);
-          
-          // ✅ DELAY entre batches para não sobrecarregar
-          if (batchEnd < prompts.length) {
-            await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-          }
-          
+          if (batchEnd < prompts.length) await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
         } catch (batchError) {
           console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
           setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
@@ -508,70 +309,42 @@ const App: React.FC = () => {
           throw batchError;
         }
       }
-      
-      // ✅ CHECKPOINT 4: Todas imagens geradas
       setProgress(75);
       await saveCheckpoint('images-complete', 75);
-      
-      // Step 3: Compose Video
       setCurrentStep('composing');
       setStatusMessage('🎬 Criando vídeo final...');
-      
       videoComposerRef.current = new VideoComposer();
       await videoComposerRef.current.load((p) => {
         setProgress(75 + (p / 100) * 20);
-        if (p % 20 === 0) {
-          setStatusMessage(`🎬 FFmpeg... ${p}%`);
-        }
+        if (p % 20 === 0) setStatusMessage(`🎬 FFmpeg... ${p}%`);
       });
-      
       setStatusMessage('🎬 Renderizando vídeo...');
-      
-      // Usar aspectRatio e videoMode corretamente
       const videoOptions: VideoOptions = {
-        fps: 24,
-        width: aspectRatio === '9:16' ? 720 : 1280,
-        height: aspectRatio === '9:16' ? 1280 : 720,
-        audioFile,
-        videoMode,
+        fps: 24, width: aspectRatio === '9:16' ? 720 : 1280,
+        height: aspectRatio === '9:16' ? 1280 : 720, audioFile, videoMode,
       };
-
-      console.log('📐 Formato do vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
-      
-      const videoBlob = await videoComposerRef.current.createVideo(
-        images,
-        videoOptions,
-        (p) => {
-          setProgress(75 + 20 + (p / 100) * 5);
-          if (p % 25 === 0) {
-            setStatusMessage(`🎬 Renderizando... ${p}%`);
-          }
-        }
-      );
-      
+      console.log('📐 Criando vídeo:', videoOptions.width, 'x', videoOptions.height, 'modo:', videoMode);
+      const videoBlob = await videoComposerRef.current.createVideo(images, videoOptions, (p) => {
+        setProgress(75 + 20 + (p / 100) * 5);
+        if (p % 25 === 0) setStatusMessage(`🎬 Renderizando... ${p}%`);
+      });
       const videoObjectUrl = URL.createObjectURL(videoBlob);
       setVideoUrl(videoObjectUrl);
-      
       setProgress(100);
       setCurrentStep('done');
       setStatusMessage('✅ Vídeo criado!');
-      
-      // ✅ Limpar checkpoint ao finalizar com sucesso
-      if (checkpointManagerRef.current) {
-        await checkpointManagerRef.current.clearCheckpoint();
-      }
-      
+      if (checkpointManagerRef.current) await checkpointManagerRef.current.clearCheckpoint();
     } catch (err) {
       console.error('Erro:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       setStatusMessage('❌ Erro! Mas seu progresso foi salvo.');
-      // ✅ NÃO limpar checkpoint em caso de erro
     }
   };
 
   const handleReset = async () => {
     setAudioFile(null);
     setCurrentStep('upload');
+    setCurrentView('main');
     setProgress(0);
     setStatusMessage('');
     setAudioAnalysis(null);
@@ -580,12 +353,7 @@ const App: React.FC = () => {
     setGeneratedImages([]);
     setVideoUrl(null);
     setError(null);
-    
-    if (audioAnalyzerRef.current) {
-      audioAnalyzerRef.current.cleanup();
-    }
-    
-    // Limpar checkpoint
+    if (audioAnalyzerRef.current) audioAnalyzerRef.current.cleanup();
     if (checkpointManagerRef.current) {
       await checkpointManagerRef.current.clearCheckpoint();
       setHasCheckpoint(false);
@@ -606,7 +374,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Re-gerar imagem com novo prompt
   const handleRegenerateImage = async (id: string, newPrompt: string) => {
     if (!imageGeneratorRef.current) {
       imageGeneratorRef.current = new ImageGenerator({
@@ -614,33 +381,14 @@ const App: React.FC = () => {
         apiKey: apiKeys[selectedProvider] || undefined,
       });
     }
-
     try {
       setStatusMessage('Re-gerando imagem...');
-
-      // Gerar nova imagem
       const newUrl = await imageGeneratorRef.current.generateImage(newPrompt, selectedTheme);
-
-      // Atualizar imagem no estado
-      setGeneratedImages(prev => prev.map(img => {
-        if (img.id === id) {
-          return { ...img, url: newUrl, prompt: newPrompt };
-        }
-        return img;
-      }));
-
-      // Atualizar no storage
+      setGeneratedImages(prev => prev.map(img => img.id === id ? { ...img, url: newUrl, prompt: newPrompt } : img));
       if (imageStorageRef.current) {
         const existingImg = generatedImages.find(img => img.id === id);
-        if (existingImg) {
-          await imageStorageRef.current.saveImage({
-            ...existingImg,
-            url: newUrl,
-            prompt: newPrompt,
-          });
-        }
+        if (existingImg) await imageStorageRef.current.saveImage({ ...existingImg, url: newUrl, prompt: newPrompt });
       }
-
       setStatusMessage('Imagem re-gerada com sucesso!');
     } catch (error) {
       console.error('Erro ao re-gerar imagem:', error);
@@ -648,48 +396,21 @@ const App: React.FC = () => {
     }
   };
 
-  // Upload de imagem local
   const handleUploadImage = async (file: File, index: number) => {
     try {
-      // Converter arquivo para URL
       const url = URL.createObjectURL(file);
-
-      // Se ja existe uma imagem nesse index, substituir
       const existingImg = generatedImages.find(img => img.segmentIndex === index);
-
       if (existingImg) {
-        // Substituir imagem existente
-        setGeneratedImages(prev => prev.map(img => {
-          if (img.segmentIndex === index) {
-            return { ...img, url, prompt: `Upload: ${file.name}` };
-          }
-          return img;
-        }));
-
-        if (imageStorageRef.current) {
-          await imageStorageRef.current.saveImage({
-            ...existingImg,
-            url,
-            prompt: `Upload: ${file.name}`,
-          });
-        }
+        setGeneratedImages(prev => prev.map(img => img.segmentIndex === index ? { ...img, url, prompt: `Upload: ${file.name}` } : img));
+        if (imageStorageRef.current) await imageStorageRef.current.saveImage({ ...existingImg, url, prompt: `Upload: ${file.name}` });
       } else {
-        // Adicionar nova imagem
         const newImage: StoredImage = {
-          id: `upload-${Date.now()}`,
-          url,
-          prompt: `Upload: ${file.name}`,
-          timestamp: Date.now(),
-          segmentIndex: index,
+          id: `upload-${Date.now()}`, url, prompt: `Upload: ${file.name}`,
+          timestamp: Date.now(), segmentIndex: index,
         };
-
         setGeneratedImages(prev => [...prev, newImage].sort((a, b) => a.segmentIndex - b.segmentIndex));
-
-        if (imageStorageRef.current) {
-          await imageStorageRef.current.saveImage(newImage);
-        }
+        if (imageStorageRef.current) await imageStorageRef.current.saveImage(newImage);
       }
-
       setStatusMessage('Imagem adicionada!');
     } catch (error) {
       console.error('Erro ao fazer upload:', error);
@@ -697,825 +418,222 @@ const App: React.FC = () => {
     }
   };
 
-  // Atualizar animacao de uma imagem
   const handleUpdateAnimation = async (id: string, animationType: string) => {
-    setGeneratedImages(prev => prev.map(img => {
-      if (img.id === id) {
-        return { ...img, animationType: animationType as any };
-      }
-      return img;
-    }));
-
-    // Salvar no storage
+    setGeneratedImages(prev => prev.map(img => img.id === id ? { ...img, animationType: animationType as any } : img));
     if (imageStorageRef.current) {
       const existingImg = generatedImages.find(img => img.id === id);
-      if (existingImg) {
-        await imageStorageRef.current.saveImage({
-          ...existingImg,
-          animationType: animationType as any,
-        });
-      }
+      if (existingImg) await imageStorageRef.current.saveImage({ ...existingImg, animationType: animationType as any });
     }
-
     const animName = animationType === 'none' ? 'Sem animação' : animationType;
     setStatusMessage(`Animação definida: ${animName}`);
   };
 
   const currentTheme = THEMES[selectedTheme];
 
-  return (
-    <div style={{
-      minHeight: '100vh',
-      background: currentTheme.gradient,
-      padding: '20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      transition: 'background 0.5s ease',
-    }}>
-      {/* Header */}
-      <header style={{
-        maxWidth: '1200px',
-        margin: '0 auto 40px',
-        textAlign: 'center',
-      }}>
-        <h1 style={{
-          color: 'white',
-          fontSize: 'clamp(32px, 8vw, 56px)',
-          fontWeight: '800',
-          margin: '0 0 10px 0',
-          textShadow: '0 2px 10px rgba(0,0,0,0.3)',
-        }}>
-          🎵 TONMOVES
-        </h1>
-        <p style={{
-          color: 'rgba(255,255,255,0.95)',
-          fontSize: 'clamp(16px, 3vw, 20px)',
-          margin: 0,
-          textShadow: '0 1px 3px rgba(0,0,0,0.2)',
-        }}>
-          Crie vídeos que contam histórias • 100% Grátis
-        </p>
-        <p style={{
-          color: 'rgba(255,255,255,0.85)',
-          fontSize: '14px',
-          margin: '5px 0 0 0',
-        }}>
-          v4.0 FREE • Web Speech API • Auto-Save
-        </p>
-      </header>
-
-      <main style={{
-        maxWidth: '900px',
-        margin: '0 auto',
-      }}>
-        {/* Recovery Banner */}
-        {hasCheckpoint && currentStep === 'upload' && (
-          <div style={{
-            background: '#fff3cd',
-            border: '2px solid #ffc107',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 15px rgba(255,193,7,0.2)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-              <div>
-                <strong style={{ color: '#856404' }}>📂 Progresso anterior encontrado!</strong>
-                <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#856404' }}>
-                  Você pode continuar de onde parou ou começar novo
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  onClick={handleRecoverProgress}
-                  style={{
-                    padding: '10px 20px',
-                    background: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  ✅ Recuperar
-                </button>
-                <button
-                  onClick={async () => {
-                    if (checkpointManagerRef.current) {
-                      await checkpointManagerRef.current.clearCheckpoint();
-                      setHasCheckpoint(false);
-                    }
-                  }}
-                  style={{
-                    padding: '10px 20px',
-                    background: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  🗑️ Descartar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            background: '#fee',
-            border: '2px solid #f44',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '20px',
-            color: '#c00',
-          }}>
-            <strong>⚠️ {error}</strong>
-            {generatedImages.length > 0 && (
-              <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>
-                ✅ {generatedImages.length} imagens foram salvas. Seu progresso não foi perdido!
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Upload Card */}
-        {currentStep === 'upload' && (
-          <div style={{
-            background: 'white',
-            borderRadius: '20px',
-            padding: '40px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-          }}>
-            <h2 style={{ marginTop: 0, color: '#333', fontSize: '24px' }}>
-              1. Selecione seu áudio
-            </h2>
-            
-            <div
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                border: '2px dashed #667eea',
-                borderRadius: '12px',
-                padding: '40px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                background: audioFile ? '#f0f4ff' : '#fafafa',
-                transition: 'all 0.3s',
-                marginBottom: '30px',
-              }}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="audio/*"
-                onChange={handleFileSelect}
-                style={{ display: 'none' }}
-              />
-              
-              {audioFile ? (
-                <>
-                  <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎵</div>
-                  <p style={{ fontSize: '18px', color: '#667eea', margin: '10px 0', fontWeight: 'bold' }}>
-                    {audioFile.name}
-                  </p>
-                  <p style={{ fontSize: '14px', color: '#666' }}>
-                    {(audioFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div style={{ fontSize: '48px', marginBottom: '10px' }}>📁</div>
-                  <p style={{ fontSize: '18px', color: '#333', fontWeight: 'bold' }}>
-                    Clique ou arraste o áudio
-                  </p>
-                  <p style={{ fontSize: '14px', color: '#666' }}>
-                    MP3, WAV, OGG, M4A
-                  </p>
-                </>
-              )}
-            </div>
-
-            {/* Transcription Provider Selector */}
-            <div style={{
-              background: '#ecfdf5',
-              padding: '20px',
-              borderRadius: '12px',
-              marginBottom: '30px',
-              border: '2px solid #10b981',
-            }}>
-              <h4 style={{ margin: '0 0 12px 0', color: '#047857', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '20px' }}>🎤</span> Transcricao de Audio
-              </h4>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: '10px',
-                marginBottom: '12px',
-              }}>
-                {TRANSCRIPTION_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setTranscriptionProvider(p.id)}
-                    style={{
-                      padding: '12px 8px',
-                      border: `2px solid ${transcriptionProvider === p.id ? '#047857' : '#ddd'}`,
-                      borderRadius: '8px',
-                      background: transcriptionProvider === p.id ? '#d1fae5' : 'white',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '18px', marginBottom: '4px' }}>{p.icon}</div>
-                    <div style={{ fontWeight: transcriptionProvider === p.id ? 'bold' : 'normal', fontSize: '12px' }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                      {p.description}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.needsKey && (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="password"
-                    placeholder={`API Key para ${TRANSCRIPTION_PROVIDERS.find(p => p.id === transcriptionProvider)?.name}`}
-                    value={transcriptionApiKey}
-                    onChange={(e) => setTranscriptionApiKey(e.target.value)}
-                    style={{
-                      flex: 1,
-                      padding: '10px 12px',
-                      border: '2px solid #ddd',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                    }}
-                  />
-                  <button
-                    onClick={handleSaveTranscriptionConfig}
-                    style={{
-                      padding: '10px 16px',
-                      background: '#047857',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    Salvar
-                  </button>
-                </div>
-              )}
-
-              {transcriptionProvider === 'groq' && (
-                <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#047857' }}>
-                  <strong>Groq Whisper:</strong> Obtenha sua API key gratuita em <a href="https://console.groq.com" target="_blank" rel="noopener noreferrer" style={{ color: '#047857' }}>console.groq.com</a>
-                </p>
-              )}
-            </div>
-
-            <h3 style={{ color: '#333' }}>2. Formato do vídeo</h3>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setAspectRatio('16:9')}
-                style={{
-                  flex: 1,
-                  minWidth: '150px',
-                  padding: '16px',
-                  border: `2px solid ${aspectRatio === '16:9' ? '#667eea' : '#ddd'}`,
-                  borderRadius: '8px',
-                  background: aspectRatio === '16:9' ? '#f0f4ff' : 'white',
-                  cursor: 'pointer',
-                  fontWeight: aspectRatio === '16:9' ? 'bold' : 'normal',
-                }}
-              >
-                📺 16:9 Paisagem
-              </button>
-              <button
-                onClick={() => setAspectRatio('9:16')}
-                style={{
-                  flex: 1,
-                  minWidth: '150px',
-                  padding: '16px',
-                  border: `2px solid ${aspectRatio === '9:16' ? '#667eea' : '#ddd'}`,
-                  borderRadius: '8px',
-                  background: aspectRatio === '9:16' ? '#f0f4ff' : 'white',
-                  cursor: 'pointer',
-                  fontWeight: aspectRatio === '9:16' ? 'bold' : 'normal',
-                }}
-              >
-                📱 9:16 Retrato
-              </button>
-            </div>
-
-            {/* Modo de Video */}
-            <h3 style={{ color: '#333' }}>3. Modo do vídeo</h3>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
-              {VIDEO_MODES.map(mode => (
-                <button
-                  key={mode.id}
-                  onClick={() => setVideoMode(mode.id)}
-                  style={{
-                    flex: 1,
-                    minWidth: '150px',
-                    padding: '16px',
-                    border: `2px solid ${videoMode === mode.id ? '#667eea' : '#ddd'}`,
-                    borderRadius: '8px',
-                    background: videoMode === mode.id ? '#f0f4ff' : 'white',
-                    cursor: 'pointer',
-                    fontWeight: videoMode === mode.id ? 'bold' : 'normal',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{mode.icon}</div>
-                  <div style={{ fontWeight: 'bold' }}>{mode.name}</div>
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{mode.description}</div>
-                </button>
-              ))}
-            </div>
-
-            <h3 style={{ color: '#333' }}>4. Tema visual</h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-              gap: '10px',
-              marginBottom: '30px',
-            }}>
-              {Object.entries(THEMES).map(([key, theme]) => (
-                <button
-                  key={key}
-                  onClick={() => setSelectedTheme(key as Theme)}
-                  style={{
-                    padding: '16px 12px',
-                    border: `2px solid ${selectedTheme === key ? '#667eea' : '#ddd'}`,
-                    borderRadius: '8px',
-                    background: selectedTheme === key ? '#f0f4ff' : 'white',
-                    cursor: 'pointer',
-                    fontWeight: selectedTheme === key ? 'bold' : 'normal',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '24px', marginBottom: '4px' }}>{theme.emoji}</div>
-                  {theme.name}
-                </button>
-              ))}
-            </div>
-
-            {/* 5. Configuracoes de API */}
-            <h3 style={{ color: '#333' }}>5. Configuracoes de API</h3>
-
-            {/* Gerador de Imagens */}
-            <div style={{
-              background: '#f0f8ff',
-              padding: '20px',
-              borderRadius: '12px',
-              marginBottom: '16px',
-              border: '2px solid #e0e7ff',
-            }}>
-              <h4 style={{ margin: '0 0 12px 0', color: '#4f46e5', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '20px' }}>🖼️</span> Gerador de Imagens
-              </h4>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: '10px',
-                marginBottom: '12px',
-              }}>
-                {IMAGE_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProvider(p.id)}
-                    style={{
-                      padding: '12px 8px',
-                      border: `2px solid ${selectedProvider === p.id ? '#4f46e5' : '#ddd'}`,
-                      borderRadius: '8px',
-                      background: selectedProvider === p.id ? '#e0e7ff' : 'white',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontWeight: selectedProvider === p.id ? 'bold' : 'normal', fontSize: '13px' }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                      {p.description}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.needsKey && (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="password"
-                    placeholder={`API Key para ${IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.name}`}
-                    value={apiKeys[selectedProvider]}
-                    onChange={(e) => setApiKeys(prev => ({ ...prev, [selectedProvider]: e.target.value }))}
-                    style={{
-                      flex: 1,
-                      padding: '10px 12px',
-                      border: '2px solid #ddd',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                    }}
-                  />
-                  <button
-                    onClick={handleSaveConfig}
-                    style={{
-                      padding: '10px 16px',
-                      background: '#4f46e5',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    Salvar
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Gerador de Video */}
-            <div style={{
-              background: '#fef3c7',
-              padding: '20px',
-              borderRadius: '12px',
-              marginBottom: '30px',
-              border: '2px solid #fcd34d',
-            }}>
-              <h4 style={{ margin: '0 0 12px 0', color: '#b45309', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '20px' }}>🎬</span> Gerador de Video
-              </h4>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                gap: '10px',
-                marginBottom: '12px',
-              }}>
-                {VIDEO_PROVIDERS.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedVideoProvider(p.id)}
-                    style={{
-                      padding: '12px 8px',
-                      border: `2px solid ${selectedVideoProvider === p.id ? '#b45309' : '#ddd'}`,
-                      borderRadius: '8px',
-                      background: selectedVideoProvider === p.id ? '#fde68a' : 'white',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '18px', marginBottom: '4px' }}>{p.icon}</div>
-                    <div style={{ fontWeight: selectedVideoProvider === p.id ? 'bold' : 'normal', fontSize: '12px' }}>
-                      {p.name}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                      {p.description}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.needsKey && (
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input
-                    type="password"
-                    placeholder={`API Key para ${VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name}`}
-                    value={videoApiKeys[selectedVideoProvider]}
-                    onChange={(e) => setVideoApiKeys(prev => ({ ...prev, [selectedVideoProvider]: e.target.value }))}
-                    style={{
-                      flex: 1,
-                      padding: '10px 12px',
-                      border: '2px solid #ddd',
-                      borderRadius: '8px',
-                      fontSize: '14px',
-                    }}
-                  />
-                  <button
-                    onClick={handleSaveVideoConfig}
-                    style={{
-                      padding: '10px 16px',
-                      background: '#b45309',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    Salvar
-                  </button>
-                </div>
-              )}
-
-              {selectedVideoProvider !== 'local' && (
-                <p style={{ margin: '12px 0 0 0', fontSize: '12px', color: '#92400e', background: '#fef3c7', padding: '8px', borderRadius: '6px' }}>
-                  <strong>Nota:</strong> APIs de video com IA (RunwayML, Luma, Stability) geram videos a partir de imagens usando inteligencia artificial avancada. Requer assinatura do servico.
-                </p>
-              )}
-            </div>
-
-            <button
-              onClick={handleStartGeneration}
-              disabled={!audioFile}
-              style={{
-                width: '100%',
-                padding: '20px',
-                background: audioFile ? currentTheme.gradient : '#ccc',
-                color: 'white',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '18px',
-                fontWeight: 'bold',
-                cursor: audioFile ? 'pointer' : 'not-allowed',
-                boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none',
-              }}
-            >
-              {audioFile ? (
-                <>
-                  <div>Criar Video</div>
-                  <div style={{ fontSize: '12px', fontWeight: 'normal', marginTop: '4px', opacity: 0.9 }}>
-                    Imagens: {IMAGE_PROVIDERS.find(p => p.id === selectedProvider)?.name} |
-                    Video: {VIDEO_PROVIDERS.find(p => p.id === selectedVideoProvider)?.name} |
-                    Modo: {VIDEO_MODES.find(m => m.id === videoMode)?.name}
+  const renderContent = () => {
+    switch (currentView) {
+      case 'settings':
+        return <Settings 
+          transcriptionProvider={transcriptionProvider}
+          setTranscriptionProvider={setTranscriptionProvider}
+          transcriptionApiKey={transcriptionApiKey}
+          setTranscriptionApiKey={setTranscriptionApiKey}
+          handleSaveTranscriptionConfig={handleSaveTranscriptionConfig}
+          selectedProvider={selectedProvider}
+          setSelectedProvider={setSelectedProvider}
+          apiKeys={apiKeys}
+          setApiKeys={setApiKeys}
+          handleSaveConfig={handleSaveConfig}
+          selectedVideoProvider={selectedVideoProvider}
+          setSelectedVideoProvider={setSelectedVideoProvider}
+          videoApiKeys={videoApiKeys}
+          setVideoApiKeys={setVideoApiKeys}
+          handleSaveVideoConfig={handleSaveVideoConfig}
+        />;
+      case 'main':
+      default:
+        return (
+          <>
+            {hasCheckpoint && currentStep === 'upload' && (
+              <div style={{ background: '#fff3cd', border: '2px solid #ffc107', borderRadius: '12px', padding: '16px', marginBottom: '20px', boxShadow: '0 4px 15px rgba(255,193,7,0.2)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <strong style={{ color: '#856404' }}>📂 Progresso anterior encontrado!</strong>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#856404' }}>Você pode continuar de onde parou ou começar novo</p>
                   </div>
-                </>
-              ) : 'Selecione um audio'}
-            </button>
-          </div>
-        )}
-
-        {/* Processing Cards - Mesmo código anterior mas com indicador de checkpoint */}
-        {(currentStep === 'analyzing' || currentStep === 'generating' || currentStep === 'composing') && (
-          <div style={{
-            background: 'white',
-            borderRadius: '20px',
-            padding: '40px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>
-              {currentStep === 'analyzing' && '🎤'}
-              {currentStep === 'generating' && '🎨'}
-              {currentStep === 'composing' && '🎬'}
-            </div>
-            <h2 style={{ color: '#333', marginBottom: '10px' }}>
-              {currentStep === 'analyzing' && 'Analisando...'}
-              {currentStep === 'generating' && 'Gerando imagens...'}
-              {currentStep === 'composing' && 'Criando vídeo...'}
-            </h2>
-            <p style={{ color: '#666', fontSize: '16px', marginBottom: '10px' }}>
-              {statusMessage}
-            </p>
-            <p style={{ color: '#28a745', fontSize: '12px', fontWeight: 'bold', marginBottom: '20px' }}>
-              💾 Progresso salvo automaticamente
-            </p>
-            
-            {/* Narrative/Context cards... */}
-            {narrative && (
-              <div style={{
-                background: '#fff5f5',
-                border: '2px solid #f093fb',
-                padding: '16px',
-                borderRadius: '12px',
-                marginBottom: '20px',
-                textAlign: 'left',
-              }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#f093fb' }}>
-                  📖 História: {narrative.story}
-                </h3>
-                {narrative.characters.length > 0 && (
-                  <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
-                    <strong>Personagens:</strong> {narrative.characters.join(', ')}
-                  </p>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button onClick={handleRecoverProgress} style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>✅ Recuperar</button>
+                    <button onClick={async () => { if (checkpointManagerRef.current) { await checkpointManagerRef.current.clearCheckpoint(); setHasCheckpoint(false); } }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🗑️ Descartar</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {error && (
+              <div style={{ background: '#fee', border: '2px solid #f44', borderRadius: '12px', padding: '16px', marginBottom: '20px', color: '#c00' }}>
+                <strong>⚠️ {error}</strong>
+                {generatedImages.length > 0 && <p style={{ margin: '10px 0 0 0', fontSize: '14px' }}>✅ {generatedImages.length} imagens foram salvas. Seu progresso não foi perdido!</p>}
+              </div>
+            )}
+            {currentStep === 'upload' && (
+              <div style={{ background: 'white', borderRadius: '20px', padding: '40px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+                <h2 style={{ marginTop: 0, color: '#333', fontSize: '24px' }}>1. Selecione seu áudio</h2>
+                <div onDragOver={handleDragOver} onDrop={handleDrop} onClick={() => fileInputRef.current?.click()} style={{ border: '2px dashed #667eea', borderRadius: '12px', padding: '40px', textAlign: 'center', cursor: 'pointer', background: audioFile ? '#f0f4ff' : '#fafafa', transition: 'all 0.3s', marginBottom: '30px' }}>
+                  <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+                  {audioFile ? (
+                    <>
+                      <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎵</div>
+                      <p style={{ fontSize: '18px', color: '#667eea', margin: '10px 0', fontWeight: 'bold' }}>{audioFile.name}</p>
+                      <p style={{ fontSize: '14px', color: '#666' }}>{(audioFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontSize: '48px', marginBottom: '10px' }}>📁</div>
+                      <p style={{ fontSize: '18px', color: '#333', fontWeight: 'bold' }}>Clique ou arraste o áudio</p>
+                      <p style={{ fontSize: '14px', color: '#666' }}>MP3, WAV, OGG, M4A</p>
+                    </>
+                  )}
+                </div>
+                <h3 style={{ color: '#333' }}>2. Formato do vídeo</h3>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                    <button onClick={() => setAspectRatio('16:9')} style={{ flex: 1, minWidth: '150px', padding: '16px', border: `2px solid ${aspectRatio === '16:9' ? '#667eea' : '#ddd'}`, borderRadius: '8px', background: aspectRatio === '16:9' ? '#f0f4ff' : 'white', cursor: 'pointer', fontWeight: aspectRatio === '16:9' ? 'bold' : 'normal' }}>📺 16:9 Paisagem</button>
+                    <button onClick={() => setAspectRatio('9:16')} style={{ flex: 1, minWidth: '150px', padding: '16px', border: `2px solid ${aspectRatio === '9:16' ? '#667eea' : '#ddd'}`, borderRadius: '8px', background: aspectRatio === '9:16' ? '#f0f4ff' : 'white', cursor: 'pointer', fontWeight: aspectRatio === '9:16' ? 'bold' : 'normal' }}>📱 9:16 Retrato</button>
+                </div>
+                <h3 style={{ color: '#333' }}>3. Modo do vídeo</h3>
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '30px', flexWrap: 'wrap' }}>
+                    {VIDEO_MODES.map(mode => (
+                        <button key={mode.id} onClick={() => setVideoMode(mode.id)} style={{ flex: 1, minWidth: '150px', padding: '16px', border: `2px solid ${videoMode === mode.id ? '#667eea' : '#ddd'}`, borderRadius: '8px', background: videoMode === mode.id ? '#f0f4ff' : 'white', cursor: 'pointer', fontWeight: videoMode === mode.id ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <div style={{ fontSize: '24px', marginBottom: '4px' }}>{mode.icon}</div>
+                            <div style={{ fontWeight: 'bold' }}>{mode.name}</div>
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>{mode.description}</div>
+                        </button>
+                    ))}
+                </div>
+                <h3 style={{ color: '#333' }}>4. Tema visual</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '30px' }}>
+                    {Object.entries(THEMES).map(([key, theme]) => (
+                        <button key={key} onClick={() => setSelectedTheme(key as Theme)} style={{ padding: '16px 12px', border: `2px solid ${selectedTheme === key ? '#667eea' : '#ddd'}`, borderRadius: '8px', background: selectedTheme === key ? '#f0f4ff' : 'white', cursor: 'pointer', fontWeight: selectedTheme === key ? 'bold' : 'normal', textAlign: 'center' }}>
+                            <div style={{ fontSize: '24px', marginBottom: '4px' }}>{theme.emoji}</div>
+                            {theme.name}
+                        </button>
+                    ))}
+                </div>
+                <button onClick={handleStartGeneration} disabled={!audioFile} style={{ width: '100%', padding: '20px', background: audioFile ? currentTheme.gradient : '#ccc', color: 'white', border: 'none', borderRadius: '12px', fontSize: '18px', fontWeight: 'bold', cursor: audioFile ? 'pointer' : 'not-allowed', boxShadow: audioFile ? '0 4px 15px rgba(102,126,234,0.4)' : 'none' }}>
+                  {audioFile ? (
+                    <>
+                      <div>Criar Video</div>
+                      <div style={{ fontSize: '12px', fontWeight: 'normal', marginTop: '4px', opacity: 0.9 }}>
+                        Imagens: {selectedProvider} | Video: {selectedVideoProvider} | Modo: {VIDEO_MODES.find(m => m.id === videoMode)?.name}
+                      </div>
+                    </>
+                  ) : 'Selecione um audio'}
+                </button>
+              </div>
+            )}
+            {(currentStep === 'analyzing' || currentStep === 'generating' || currentStep === 'composing') && (
+              <div style={{ background: 'white', borderRadius: '20px', padding: '40px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: '64px', marginBottom: '20px' }}>
+                  {currentStep === 'analyzing' && '🎤'}
+                  {currentStep === 'generating' && '🎨'}
+                  {currentStep === 'composing' && '🎬'}
+                </div>
+                <h2 style={{ color: '#333', marginBottom: '10px' }}>
+                  {currentStep === 'analyzing' && 'Analisando...'}
+                  {currentStep === 'generating' && 'Gerando imagens...'}
+                  {currentStep === 'composing' && 'Criando vídeo...'}
+                </h2>
+                <p style={{ color: '#666', fontSize: '16px', marginBottom: '10px' }}>{statusMessage}</p>
+                <p style={{ color: '#28a745', fontSize: '12px', fontWeight: 'bold', marginBottom: '20px' }}>💾 Progresso salvo automaticamente</p>
+                {narrative && (
+                  <div style={{ background: '#fff5f5', border: '2px solid #f093fb', padding: '16px', borderRadius: '12px', marginBottom: '20px', textAlign: 'left' }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#f093fb' }}>📖 História: {narrative.story}</h3>
+                    {narrative.characters.length > 0 && <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}><strong>Personagens:</strong> {narrative.characters.join(', ')}</p>}
+                  </div>
+                )}
+                {globalContext && (
+                  <div style={{ background: '#f0f4ff', padding: '16px', borderRadius: '12px', marginBottom: '20px', textAlign: 'left' }}>
+                    <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#667eea' }}>🎬 Tema: {currentTheme.emoji} {currentTheme.name}</h3>
+                    <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>{globalContext.mainTheme}</p>
+                  </div>
+                )}
+                <div style={{ width: '100%', height: '12px', background: '#eee', borderRadius: '6px', overflow: 'hidden' }}>
+                  <div style={{ width: `${progress}%`, height: '100%', background: currentTheme.gradient, transition: 'width 0.3s ease' }} />
+                </div>
+                <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>{progress.toFixed(0)}% • {generatedImages.length} imagens salvas</p>
+                {generatedImages.length > 0 && !videoUrl && currentStep !== 'done' && (
+                  <button onClick={handleCreateVideoFromRecovered} style={{ width: '100%', padding: '20px', marginTop: '20px', background: currentTheme.gradient, color: 'white', border: 'none', borderRadius: '12px', fontSize: '20px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 15px rgba(102,126,234,0.4)', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
+                    Criar Video Agora ({generatedImages.length} imagens prontas)
+                  </button>
+                )}
+                {generatedImages.length > 0 && (
+                  <div style={{ marginTop: '30px', textAlign: 'left' }}>
+                    <ImageGallery images={generatedImages} onDelete={handleDeleteImage} onClearAll={handleClearAllImages} onRegenerate={handleRegenerateImage} onUpload={handleUploadImage} onUpdateAnimation={handleUpdateAnimation} />
+                  </div>
                 )}
               </div>
             )}
-
-            {globalContext && (
-              <div style={{
-                background: '#f0f4ff',
-                padding: '16px',
-                borderRadius: '12px',
-                marginBottom: '20px',
-                textAlign: 'left',
-              }}>
-                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', color: '#667eea' }}>
-                  🎬 Tema: {currentTheme.emoji} {currentTheme.name}
-                </h3>
-                <p style={{ margin: '5px 0', fontSize: '14px', color: '#666' }}>
-                  {globalContext.mainTheme}
-                </p>
+            {currentStep === 'done' && videoUrl && (
+              <div style={{ background: 'white', borderRadius: '20px', padding: '40px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', textAlign: 'center' }}>
+                <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎉</div>
+                <h2 style={{ color: '#333', marginBottom: '20px' }}>Vídeo criado! {aspectRatio === '9:16' ? '📱' : '📺'}</h2>
+                {narrative && (
+                  <div style={{ background: '#fff5f5', border: '2px solid #f093fb', padding: '16px', borderRadius: '12px', marginBottom: '20px', textAlign: 'left' }}>
+                    <p style={{ margin: 0, fontSize: '14px', color: '#666' }}><strong>História:</strong> {narrative.story}</p>
+                  </div>
+                )}
+                <div style={{ background: '#f0f4ff', padding: '20px', borderRadius: '12px', marginBottom: '20px' }}>
+                  <video controls style={{ width: '100%', maxWidth: aspectRatio === '16:9' ? '600px' : '400px', borderRadius: '8px', boxShadow: '0 8px 30px rgba(0,0,0,0.2)' }}>
+                    <source src={videoUrl} type="video/mp4" />
+                  </video>
+                </div>
+                {generatedImages.length > 0 && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <ImageGallery images={generatedImages} onDelete={handleDeleteImage} onClearAll={handleClearAllImages} onRegenerate={handleRegenerateImage} onUpload={handleUploadImage} onUpdateAnimation={handleUpdateAnimation} />
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <a href={videoUrl} download={`tonmoves-${aspectRatio}-${Date.now()}.mp4`} style={{ flex: 1, minWidth: '150px', padding: '16px', background: currentTheme.gradient, color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', textDecoration: 'none', display: 'inline-block', textAlign: 'center', cursor: 'pointer' }}>
+                    ⬇️ Download
+                  </a>
+                  <button onClick={handleReset} style={{ flex: 1, minWidth: '150px', padding: '16px', background: 'white', color: '#667eea', border: '2px solid #667eea', borderRadius: '12px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    🔄 Criar Novo
+                  </button>
+                </div>
               </div>
             )}
-            
-            {/* Progress Bar */}
-            <div style={{
-              width: '100%',
-              height: '12px',
-              background: '#eee',
-              borderRadius: '6px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${progress}%`,
-                height: '100%',
-                background: currentTheme.gradient,
-                transition: 'width 0.3s ease',
-              }} />
-            </div>
-            <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>
-              {progress.toFixed(0)}% • {generatedImages.length} imagens salvas
-            </p>
+          </>
+        );
+    }
+  };
 
-            {/* Botao para criar video - aparece quando tem imagens e nao tem video */}
-            {generatedImages.length > 0 && !videoUrl && currentStep !== 'done' && (
-              <button
-                onClick={handleCreateVideoFromRecovered}
-                style={{
-                  width: '100%',
-                  padding: '20px',
-                  marginTop: '20px',
-                  background: currentTheme.gradient,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '20px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 15px rgba(102,126,234,0.4)',
-                  transition: 'transform 0.2s',
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                Criar Video Agora ({generatedImages.length} imagens prontas)
-              </button>
-            )}
+  return (
+    <div style={{ minHeight: '100vh', background: currentTheme.gradient, padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background 0.5s ease' }}>
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} setCurrentView={setCurrentView} />
 
-            {/* Progress Bar */}
-            <div style={{
-              width: '100%',
-              height: '12px',
-              background: '#eee',
-              borderRadius: '6px',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${progress}%`,
-                height: '100%',
-                background: currentTheme.gradient,
-                transition: 'width 0.3s ease',
-              }} />
-            </div>
-            <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>
-              {progress.toFixed(0)}% • {generatedImages.length} imagens salvas
-            </p>
+      {/* Header */}
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center', position: 'relative' }}>
+        <button onClick={() => setIsSidebarOpen(true)} style={{ position: 'absolute', left: 0, background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', fontSize: '24px' }}>
+          ☰
+        </button>
+        <div>
+          <h1 style={{ color: 'white', fontSize: 'clamp(32px, 8vw, 56px)', fontWeight: '800', margin: '0 0 10px 0', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
+            🎵 TONMOVES
+          </h1>
+          <p style={{ color: 'rgba(255,255,255,0.95)', fontSize: 'clamp(16px, 3vw, 20px)', margin: 0, textShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
+            Crie vídeos que contam histórias • 100% Grátis
+          </p>
+          <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '14px', margin: '5px 0 0 0' }}>
+            v4.0 FREE • Web Speech API • Auto-Save
+          </p>
+        </div>
+      </header>
 
-            {/* Image Gallery */}
-            {generatedImages.length > 0 && (
-              <div style={{ marginTop: '30px', textAlign: 'left' }}>
-                <ImageGallery
-                  images={generatedImages}
-                  onDelete={handleDeleteImage}
-                  onClearAll={handleClearAllImages}
-                  onRegenerate={handleRegenerateImage}
-                  onUpload={handleUploadImage}
-                  onUpdateAnimation={handleUpdateAnimation}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Done Card - mesmo código anterior */}
-        {currentStep === 'done' && videoUrl && (
-          <div style={{
-            background: 'white',
-            borderRadius: '20px',
-            padding: '40px',
-            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎉</div>
-            <h2 style={{ color: '#333', marginBottom: '20px' }}>
-              Vídeo criado! {aspectRatio === '9:16' ? '📱' : '📺'}
-            </h2>
-            
-            {narrative && (
-              <div style={{
-                background: '#fff5f5',
-                border: '2px solid #f093fb',
-                padding: '16px',
-                borderRadius: '12px',
-                marginBottom: '20px',
-                textAlign: 'left',
-              }}>
-                <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
-                  <strong>História:</strong> {narrative.story}
-                </p>
-              </div>
-            )}
-            
-            <div style={{
-              background: '#f0f4ff',
-              padding: '20px',
-              borderRadius: '12px',
-              marginBottom: '20px',
-            }}>
-              <video
-                controls
-                style={{
-                  width: '100%',
-                  maxWidth: aspectRatio === '16:9' ? '600px' : '400px',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
-                }}
-              >
-                <source src={videoUrl} type="video/mp4" />
-              </video>
-            </div>
-
-            {generatedImages.length > 0 && (
-              <div style={{ marginBottom: '20px' }}>
-                <ImageGallery
-                  images={generatedImages}
-                  onDelete={handleDeleteImage}
-                  onClearAll={handleClearAllImages}
-                  onRegenerate={handleRegenerateImage}
-                  onUpload={handleUploadImage}
-                  onUpdateAnimation={handleUpdateAnimation}
-                />
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <a
-                href={videoUrl}
-                download={`tonmoves-${aspectRatio}-${Date.now()}.mp4`}
-                style={{
-                  flex: 1,
-                  minWidth: '150px',
-                  padding: '16px',
-                  background: currentTheme.gradient,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  textDecoration: 'none',
-                  display: 'inline-block',
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                ⬇️ Download
-              </a>
-              <button
-                onClick={handleReset}
-                style={{
-                  flex: 1,
-                  minWidth: '150px',
-                  padding: '16px',
-                  background: 'white',
-                  color: '#667eea',
-                  border: '2px solid #667eea',
-                  borderRadius: '12px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                }}
-              >
-                🔄 Criar Novo
-              </button>
-            </div>
-          </div>
-        )}
+      <main style={{ maxWidth: '900px', margin: '0 auto' }}>
+        {renderContent()}
       </main>
 
-      <footer style={{
-        maxWidth: '900px',
-        margin: '40px auto 0',
-        textAlign: 'center',
-        color: 'rgba(255,255,255,0.9)',
-        fontSize: '14px',
-      }}>
-        <p style={{ margin: '5px 0' }}>
-          Web Speech API • Pollinations.ai • FFmpeg.wasm • 100% Grátis
-        </p>
-        <p style={{ margin: '5px 0' }}>
-          v4.0 FREE • Auto-Save • {aspectRatio} • {currentTheme.name}
-        </p>
+      <footer style={{ maxWidth: '900px', margin: '40px auto 0', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: '14px' }}>
+        <p style={{ margin: '5px 0' }}>Web Speech API • Pollinations.ai • FFmpeg.wasm • 100% Grátis</p>
+        <p style={{ margin: '5px 0' }}>v4.0 FREE • Auto-Save • {aspectRatio} • {currentTheme.name}</p>
       </footer>
     </div>
   );

@@ -495,183 +495,144 @@ export class VideoComposer {
     } = options;
 
     const isAnimated = videoMode === 'animated';
-    const framesPerImage = isAnimated ? 120 : 1; // 5 seconds at 24fps for animated
+    const DURATION_PER_IMAGE_ANIMATED = 5; // 5 segundos por imagem no modo animado
 
     console.log(`Criando video ${width}x${height} com ${images.length} imagens (modo: ${videoMode})`);
 
     try {
-      // 1. Escrever imagens no sistema de arquivos do FFmpeg
+      // 1. Escrever imagens no sistema de arquivos do FFmpeg (apenas uma por imagem)
       console.log('Escrevendo imagens...');
       const writtenFiles: string[] = [];
-      let frameIndex = 0;
-
       for (let i = 0; i < images.length; i++) {
+        const filename = `img${i.toString().padStart(3, '0')}.jpg`;
         try {
           const imageData = await loadImageAsBlob(images[i].url, width, height, i);
-
-          if (isAnimated) {
-            // Generate animated frames with Ken Burns effect
-            // Usar animação definida na imagem, ou selecionar automaticamente
-            const animationType = (images[i].animationType && images[i].animationType !== 'none')
-              ? images[i].animationType as AnimationType
-              : getAnimationType(i);
-            console.log(`Gerando ${framesPerImage} frames animados para imagem ${i + 1} (${animationType})...`);
-
-            const animatedFrames = await generateKenBurnsFrames(
-              imageData,
-              width,
-              height,
-              framesPerImage,
-              animationType
-            );
-
-            for (let f = 0; f < animatedFrames.length; f++) {
-              const filename = `img${frameIndex.toString().padStart(6, '0')}.jpg`;
-              await this.ffmpeg.writeFile(filename, animatedFrames[f]);
-              writtenFiles.push(filename);
-              frameIndex++;
-            }
-          } else {
-            // Slideshow mode - single frame per image
-            const filename = `img${frameIndex.toString().padStart(6, '0')}.jpg`;
-            await this.ffmpeg.writeFile(filename, imageData);
-            writtenFiles.push(filename);
-            frameIndex++;
-          }
-
+          await this.ffmpeg.writeFile(filename, imageData);
+          writtenFiles.push(filename);
           console.log(`Imagem ${i + 1}/${images.length} OK`);
         } catch (imgError) {
           console.error(`Erro na imagem ${i}:`, imgError);
-          // Criar placeholder se falhar
           const placeholder = createColorPlaceholder(width, height, i);
-
-          if (isAnimated) {
-            // Generate animated frames for placeholder too
-            const animationType = (images[i].animationType && images[i].animationType !== 'none')
-              ? images[i].animationType as AnimationType
-              : getAnimationType(i);
-            const animatedFrames = await generateKenBurnsFrames(
-              placeholder,
-              width,
-              height,
-              framesPerImage,
-              animationType
-            );
-
-            for (let f = 0; f < animatedFrames.length; f++) {
-              const filename = `img${frameIndex.toString().padStart(6, '0')}.jpg`;
-              await this.ffmpeg.writeFile(filename, animatedFrames[f]);
-              writtenFiles.push(filename);
-              frameIndex++;
-            }
-          } else {
-            const filename = `img${frameIndex.toString().padStart(6, '0')}.jpg`;
-            await this.ffmpeg.writeFile(filename, placeholder);
-            writtenFiles.push(filename);
-            frameIndex++;
-          }
+          await this.ffmpeg.writeFile(filename, placeholder);
+          writtenFiles.push(filename);
+          console.log(`Placeholder usado para imagem ${i + 1}`);
         }
-
         if (onProgress) {
           onProgress(Math.round((i / images.length) * 40));
         }
       }
-
-      console.log(`${writtenFiles.length} frames escritos`);
+      console.log(`${writtenFiles.length} imagens escritas`);
+      if (onProgress) onProgress(45);
 
       // 2. Escrever audio se fornecido
       let hasAudio = false;
+      let totalDuration = images.length * 2; // Duração padrão se não houver áudio
       if (audioFile) {
         try {
           console.log('Escrevendo audio...');
           const audioData = await fetchFile(audioFile);
           await this.ffmpeg.writeFile('audio.mp3', audioData);
+          totalDuration = await this.getAudioDuration(audioFile);
           hasAudio = true;
-          console.log('Audio escrito OK');
+          console.log(`Audio escrito OK, duração: ${totalDuration.toFixed(2)}s`);
         } catch (audioError) {
           console.error('Erro ao escrever audio:', audioError);
         }
       }
-
       if (onProgress) onProgress(50);
 
-      // 3. Calcular duracao e framerate
-      const totalDuration = hasAudio ? await this.getAudioDuration(audioFile!) : images.length * 2;
-
-      let inputFramerate: string;
-      let outputDuration: number;
-
-      if (isAnimated) {
-        // Animated mode: frames are already at fps rate (24fps)
-        inputFramerate = fps.toString();
-        outputDuration = writtenFiles.length / fps;
-        console.log(`Modo animado: ${writtenFiles.length} frames a ${fps}fps = ${outputDuration.toFixed(1)}s`);
-      } else {
-        // Slideshow mode: calculate framerate to match audio duration
-        const durationPerImage = Math.max(0.5, totalDuration / images.length);
-        inputFramerate = (1 / durationPerImage).toFixed(4);
-        outputDuration = totalDuration;
-        console.log(`Modo slideshow: ${images.length} imagens, ${durationPerImage.toFixed(1)}s cada = ${totalDuration.toFixed(1)}s`);
-      }
-
-      // 4. Criar video - comando simplificado
+      // 3. Construir e executar comando FFmpeg
       console.log('Executando FFmpeg...');
-
       let ffmpegArgs: string[];
 
-      if (hasAudio) {
-        // Com audio
-        ffmpegArgs = [
-          '-framerate', inputFramerate,
-          '-i', 'img%06d.jpg',
-          '-i', 'audio.mp3',
-          '-c:v', 'libx264',
-          '-pix_fmt', 'yuv420p',
-          '-c:a', 'aac',
-          '-shortest',
-          '-y',
-          'output.mp4'
-        ];
+      if (isAnimated) {
+        // --- NOVA LÓGICA MODO ANIMADO COM ZOOMPAN ---
+        const DURATION_PER_IMAGE = hasAudio ? Math.max(1, totalDuration / images.length) : DURATION_PER_IMAGE_ANIMATED;
+        const filterComplex: string[] = [];
+        let outputStreams = '';
+
+        for (let i = 0; i < images.length; i++) {
+          const animationType = (images[i].animationType && images[i].animationType !== 'none')
+              ? images[i].animationType as AnimationType
+              : getAnimationType(i);
+
+          const zoompanFilter = this.getZoomPanFilter(animationType, DURATION_PER_IMAGE, fps);
+          
+          filterComplex.push(`[${i}:v]scale=${width}*2:-1,${zoompanFilter},trim=duration=${DURATION_PER_IMAGE},setpts=PTS-STARTPTS[v${i}]`);
+          outputStreams += `[v${i}]`;
+        }
+
+        filterComplex.push(`${outputStreams}concat=n=${images.length}:v=1:a=0[v]`);
+        
+        const command = filterComplex.join(';');
+
+        if (hasAudio) {
+          ffmpegArgs = [
+            ...images.map(img => '-i'), ...writtenFiles,
+            '-i', 'audio.mp3',
+            '-filter_complex', command,
+            '-map', '[v]',
+            '-map', `${images.length}:a`, // Mapeia o stream de áudio
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-shortest',
+            '-y',
+            'output.mp4'
+          ];
+        } else {
+          ffmpegArgs = [
+            ...images.map(img => '-i'), ...writtenFiles,
+            '-filter_complex', command,
+            '-map', '[v]',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-t', (images.length * DURATION_PER_IMAGE).toString(),
+            '-y',
+            'output.mp4'
+          ];
+        }
+
       } else {
-        // Sem audio
-        ffmpegArgs = [
-          '-framerate', inputFramerate,
-          '-i', 'img%06d.jpg',
-          '-c:v', 'libx264',
-          '-pix_fmt', 'yuv420p',
-          '-t', outputDuration.toString(),
-          '-y',
-          'output.mp4'
-        ];
+        // --- LÓGICA SLIDESHOW (EXISTENTE) ---
+        const durationPerImage = Math.max(0.5, totalDuration / images.length);
+        const inputFramerate = (1 / durationPerImage).toFixed(4);
+
+        if (hasAudio) {
+          ffmpegArgs = [
+            '-framerate', inputFramerate,
+            '-i', 'img%03d.jpg',
+            '-i', 'audio.mp3',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-shortest',
+            '-y', 'output.mp4'
+          ];
+        } else {
+          ffmpegArgs = [
+            '-framerate', inputFramerate,
+            '-i', 'img%03d.jpg',
+            '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+            '-t', totalDuration.toString(),
+            '-y', 'output.mp4'
+          ];
+        }
       }
 
       console.log('FFmpeg args:', ffmpegArgs.join(' '));
-
       await this.ffmpeg.exec(ffmpegArgs);
-
       if (onProgress) onProgress(90);
 
-      // 5. Ler video de saida
+      // 4. Ler video de saida
       console.log('Lendo video...');
-
-      let data: Uint8Array;
-      try {
-        const fileData = await this.ffmpeg.readFile('output.mp4');
-        data = fileData as Uint8Array;
-      } catch (readError) {
-        console.error('Erro ao ler output.mp4:', readError);
-        throw new Error('FFmpeg nao gerou o video. Verifique o console para mais detalhes.');
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error('Video gerado esta vazio');
-      }
-
+      const fileData = await this.ffmpeg.readFile('output.mp4');
+      if (!fileData) throw new Error('FFmpeg nao gerou o video. Verifique o console para mais detalhes.');
+      const data = fileData as Uint8Array;
+      if (data.length === 0) throw new Error('Video gerado esta vazio');
       console.log(`Video gerado: ${(data.length / 1024 / 1024).toFixed(2)} MB`);
-
       if (onProgress) onProgress(100);
 
-      // 6. Limpeza (ignorar erros)
+      // 5. Limpeza (ignorar erros)
       for (const filename of writtenFiles) {
         try { await this.ffmpeg.deleteFile(filename); } catch {}
       }
@@ -685,6 +646,48 @@ export class VideoComposer {
       console.error('Erro ao criar video:', error);
       throw error;
     }
+  }
+
+  // NOVO: Gera a string do filtro zoompan
+  private getZoomPanFilter(animationType: AnimationType, duration: number, fps: number): string {
+    const totalFrames = Math.ceil(duration * fps);
+    const zoomAmount = 1.5; // Zoom máximo de 150%
+    let zoomExpr = "'1'";
+    let xExpr = "'iw/2-(iw/zoom/2)'";
+    let yExpr = "'ih/2-(ih/zoom/2)'";
+
+    switch (animationType) {
+      case 'zoomIn':
+        zoomExpr = `'min(zoom+${(zoomAmount - 1) / totalFrames}, ${zoomAmount})'`;
+        break;
+      case 'zoomOut':
+        zoomExpr = `'max(zoom-${(zoomAmount - 1) / totalFrames}, 1)'`;
+        break;
+      case 'panLeft':
+        zoomExpr = `'1.2'`;
+        xExpr = `'0'`;
+        break;
+      case 'panRight':
+        zoomExpr = `'1.2'`;
+        xExpr = `'iw-iw/1.2'`;
+        break;
+      case 'panUp':
+        zoomExpr = `'1.2'`;
+        yExpr = `'0'`;
+        break;
+      case 'panDown':
+        zoomExpr = `'1.2'`;
+        yExpr = `'ih-ih/1.2'`;
+        break;
+      case 'kenBurnsClassic':
+      default:
+        zoomExpr = `'min(zoom+${0.5 / totalFrames}, 1.5)'`;
+        xExpr = `'iw/2-(iw/zoom/2) + (n/${totalFrames})*100'`;
+        yExpr = `'ih/2-(ih/zoom/2) - (n/${totalFrames})*50'`;
+        break;
+    }
+
+    return `zoompan=z=${zoomExpr}:x=${xExpr}:y=${yExpr}:d=${totalFrames}:s=${options.width}x${options.height}:fps=${fps}`;
   }
 
   private async getAudioDuration(audioFile: File): Promise<number> {

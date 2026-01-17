@@ -401,16 +401,22 @@ export class ImageGenerator {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Together AI error: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      let message = `Together AI error: ${response.status}`;
+      if (response.status === 401) {
+        message += ' - Verifique sua API Key.';
+      } else if (response.status >= 500) {
+        message += ' - O serviço pode estar temporariamente fora do ar.';
+      } else {
+        message += ` - ${errorText}`;
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
-
     if (!data.data?.[0]?.url) {
-      throw new Error('Together AI: No image URL returned');
+      throw new Error('Together AI: Resposta inválida, sem URL da imagem.');
     }
-
     return data.data[0].url;
   }
 
@@ -425,27 +431,32 @@ export class ImageGenerator {
         model: 'dall-e-3',
         prompt: prompt,
         n: 1,
-        size: '1024x1792', // Vertical
+        size: '1024x1792',
         quality: 'standard',
       })
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI error: ${response.status} - ${error}`);
+      const errorBody = await response.json().catch(() => ({ error: { message: 'Resposta de erro inválida' } }));
+      let message = `OpenAI DALL-E error: ${response.status}`;
+      if (response.status === 401) {
+        message += ' - Verifique sua API Key.';
+      } else if (response.status === 429) {
+        message += ' - Limite de taxa excedido. Tente novamente mais tarde.';
+      } else {
+        message += ` - ${errorBody.error?.message || 'Erro desconhecido'}`;
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
-
     if (!data.data?.[0]?.url) {
-      throw new Error('OpenAI: No image URL returned');
+      throw new Error('OpenAI: Resposta inválida, sem URL da imagem.');
     }
-
     return data.data[0].url;
   }
 
   private async generateWithGemini(prompt: string, apiKey: string): Promise<string> {
-    // Gemini Imagen API
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
       {
@@ -462,64 +473,58 @@ export class ImageGenerator {
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Gemini error: ${response.status} - ${error}`);
+      const errorBody = await response.json().catch(() => ({ error: { message: 'Resposta de erro inválida' } }));
+      let message = `Gemini Imagen error: ${response.status}`;
+      if (response.status === 400) {
+        message += ' - API Key inválida ou problema na requisição.';
+      } else if (response.status >= 500) {
+        message += ' - O serviço do Google pode estar temporariamente fora do ar.';
+      } else {
+        message += ` - ${errorBody.error?.message || 'Erro desconhecido'}`;
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
-
     if (!data.predictions?.[0]?.bytesBase64Encoded) {
-      throw new Error('Gemini: No image returned');
+      throw new Error('Gemini: Resposta inválida, sem imagem retornada.');
     }
-
-    // Converter base64 para URL
-    const base64 = data.predictions[0].bytesBase64Encoded;
-    return `data:image/png;base64,${base64}`;
+    return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
   }
 
   private generateWithPollinations(prompt: string): string {
     const encodedPrompt = encodeURIComponent(prompt);
-    // Usar timestamp + random para seed unica
     const seed = Date.now() + Math.floor(Math.random() * 100000);
-
     return `https://image.pollinations.ai/prompt/${encodedPrompt}?seed=${seed}&width=720&height=1280&nologo=true&model=flux`;
   }
 
-  // Pexels API - Busca fotos reais de alta qualidade
   private async searchPexelsPhoto(prompt: string, theme: Theme, apiKey: string): Promise<string> {
-    // Extrair palavras-chave do prompt
     const keywords = this.extractKeywordsForPexels(prompt, theme);
     const query = encodeURIComponent(keywords);
 
-    // Buscar com orientacao vertical para videos de celular
     const response = await fetch(
       `https://api.pexels.com/v1/search?query=${query}&orientation=portrait&per_page=15&size=large`,
       {
-        headers: {
-          'Authorization': apiKey,
-        }
+        headers: { 'Authorization': apiKey }
       }
     );
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Pexels API error: ${response.status} - ${error}`);
+      let message = `Pexels API error: ${response.status}`;
+      if (response.status === 401) {
+        message += ' - Verifique sua API Key do Pexels.';
+      }
+      throw new Error(message);
     }
 
     const data = await response.json();
-
     if (!data.photos || data.photos.length === 0) {
-      // Fallback: buscar por tema se nao encontrar resultados
       console.log(`Pexels: Nenhum resultado para "${keywords}", tentando tema "${theme}"...`);
       return this.searchPexelsFallback(theme, apiKey);
     }
-
-    // Selecionar foto aleatoria dos resultados para variedade
+    
     const randomIndex = Math.floor(Math.random() * data.photos.length);
     const photo = data.photos[randomIndex];
-
-    // Retornar URL da imagem em alta qualidade (portrait)
-    // Pexels oferece: original, large2x, large, medium, small, portrait, landscape, tiny
     return photo.src.portrait || photo.src.large || photo.src.original;
   }
 
