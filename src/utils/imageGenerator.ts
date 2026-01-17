@@ -610,7 +610,8 @@ export class ImageGenerator {
   }
 }
 
-// Exportar funcao para buscar videos do Pexels (para uso no videoComposer)
+// Exportar funcao para buscar imagens de videos do Pexels (retorna thumbnail do video)
+// Nota: Retorna a IMAGEM do video (thumbnail) que funciona sem problemas de CORS
 export async function searchPexelsVideos(
   query: string,
   apiKey: string,
@@ -636,12 +637,11 @@ export async function searchPexelsVideos(
   }
 
   return data.videos.map((video: any) => {
-    // Pegar o video file de melhor qualidade em HD
-    const videoFile = video.video_files.find((f: any) => f.quality === 'hd' && f.height >= 720)
-      || video.video_files[0];
-
+    // IMPORTANTE: Retornar a IMAGEM de preview do video (nao a URL do video)
+    // Isso evita problemas de CORS com arquivos .mp4 do Pexels
+    // A imagem do Pexels permite CORS e pode ser carregada pelo FFmpeg
     return {
-      url: videoFile.link,
+      url: video.image, // Thumbnail/preview image do video
       duration: video.duration
     };
   });

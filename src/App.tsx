@@ -532,23 +532,6 @@ const App: React.FC = () => {
                     <button onClick={handleRecoverProgress} style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>✅ Recuperar</button>
                     <button onClick={async () => { if (checkpointManagerRef.current) { await checkpointManagerRef.current.clearCheckpoint(); setHasCheckpoint(false); } }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>🗑️ Descartar</button>
                   </div>
-                  <button
-                    onClick={() => setSelectedVideoProvider('runwayml-gen3')}
-                    style={{
-                      flex: 1,
-                      minWidth: '200px',
-                      padding: '16px',
-                      border: `2px solid ${selectedVideoProvider === 'runwayml-gen3' ? '#667eea' : '#ddd'}`,
-                      borderRadius: '8px',
-                      background: selectedVideoProvider === 'runwayml-gen3' ? '#f0f4ff' : 'white',
-                      cursor: 'pointer',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎥</div>
-                    <div style={{ fontWeight: selectedVideoProvider === 'runwayml-gen3' ? 'bold' : 'normal' }}>RunwayML Gen-3</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Gera vídeos animados com IA</div>
-                  </button>
                 </div>
               </div>
             )}
@@ -631,6 +614,7 @@ const App: React.FC = () => {
                       setSelectedVideoProvider('pexels');
                       setSelectedProvider('pexels');
                     }}
+                    disabled={!apiKeys.pexels}
                     style={{
                       flex: 1,
                       minWidth: '200px',
@@ -638,13 +622,16 @@ const App: React.FC = () => {
                       border: `2px solid ${selectedVideoProvider === 'pexels' ? '#667eea' : '#ddd'}`,
                       borderRadius: '8px',
                       background: selectedVideoProvider === 'pexels' ? '#f0f4ff' : 'white',
-                      cursor: 'pointer',
+                      cursor: apiKeys.pexels ? 'pointer' : 'not-allowed',
                       textAlign: 'center',
+                      opacity: apiKeys.pexels ? 1 : 0.5,
                     }}
                   >
-                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>🎬</div>
-                    <div style={{ fontWeight: selectedVideoProvider === 'pexels' ? 'bold' : 'normal' }}>Vídeos Pexels</div>
-                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Busca clipes de vídeo reais HD</div>
+                    <div style={{ fontSize: '24px', marginBottom: '4px' }}>📸</div>
+                    <div style={{ fontWeight: selectedVideoProvider === 'pexels' ? 'bold' : 'normal' }}>Fotos Pexels</div>
+                    <div style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>
+                      {apiKeys.pexels ? 'Fotos profissionais reais HD' : '⚠️ Configure API key'}
+                    </div>
                   </button>
                 </div>
 
@@ -679,12 +666,11 @@ const App: React.FC = () => {
                   </div>
                 )}
 
-                {/* Aviso para Pexels Videos */}
+                {/* Aviso para Pexels Photos */}
                 {selectedVideoProvider === 'pexels' && (
-                  <div style={{ background: '#fef3c7', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #fcd34d' }}>
-                    <p style={{ margin: 0, fontSize: '13px', color: '#92400e' }}>
-                      <strong>📹 Modo Vídeos:</strong> Serão buscados clipes de vídeo reais do Pexels baseados no tema e análise do áudio.
-                      {!apiKeys.pexels && <span style={{ color: '#dc2626' }}> ⚠️ Configure a API key do Pexels em Configurações!</span>}
+                  <div style={{ background: '#e0f2fe', padding: '15px', borderRadius: '10px', marginBottom: '20px', border: '1px solid #7dd3fc' }}>
+                    <p style={{ margin: 0, fontSize: '13px', color: '#0369a1' }}>
+                      <strong>📸 Modo Pexels:</strong> Busca fotos profissionais reais do Pexels baseadas no tema e análise do áudio.
                     </p>
                   </div>
                 )}
@@ -779,7 +765,7 @@ const App: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', background: currentTheme.gradient, padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background 0.5s ease' }}>
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} setCurrentView={setCurrentView} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} setCurrentView={setCurrentView} onNewProject={handleReset} />
 
       {/* Header */}
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center', position: 'relative' }}>

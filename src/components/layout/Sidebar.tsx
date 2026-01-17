@@ -5,6 +5,7 @@ interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   setCurrentView: (view: CurrentView) => void;
+  onNewProject?: () => void;
 }
 
 interface MenuItem {
@@ -32,10 +33,14 @@ const MENU_ITEMS: MenuItem[] = [
   },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, setCurrentView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, setCurrentView, onNewProject }) => {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
 
   const handleNavigation = (view: CurrentView) => {
+    // Se for "Novo Projeto", chamar a função de reset
+    if (view === 'main' && onNewProject) {
+      onNewProject();
+    }
     setCurrentView(view);
     onClose();
   };
