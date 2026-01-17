@@ -141,30 +141,64 @@ const App: React.FC = () => {
     setHasCheckpoint(hasRecent);
   };
 
+  // ANCHOR: Handle Recover Progress
+  // DESC: Recupera progresso salvo do checkpoint e IndexedDB
+  // WHY: Permitir que usuário continue de onde parou após interrupção
+  // FUTURE: Melhorar validação de imagens recuperadas
   const handleRecoverProgress = async () => {
     if (!checkpointManagerRef.current) return;
     const checkpoint = await checkpointManagerRef.current.loadCheckpoint();
     if (!checkpoint) return;
 
     setProgress(checkpoint.progress);
-    setCurrentStep(checkpoint.step as Step);
     if (checkpoint.data.audioAnalysis) setAudioAnalysis(checkpoint.data.audioAnalysis);
     if (checkpoint.data.globalContext) setGlobalContext(checkpoint.data.globalContext);
     if (checkpoint.data.narrative) setNarrative(checkpoint.data.narrative);
-    if (checkpoint.data.generatedImages) {
-      setGeneratedImages(checkpoint.data.generatedImages);
-      if (checkpoint.step === 'images-complete' || checkpoint.progress >= 75) {
-        setCurrentStep('composing');
-        setStatusMessage('📂 Imagens recuperadas! Pronto para criar vídeo.');
-      }
-    }
     if (checkpoint.data.aspectRatio) setAspectRatio(checkpoint.data.aspectRatio as AspectRatio);
     if (checkpoint.data.theme) setSelectedTheme(checkpoint.data.theme as Theme);
 
-    setStatusMessage('📂 Progresso recuperado! Continuando de onde parou...');
+    // Tentar carregar imagens do checkpoint OU do IndexedDB
+    let recoveredImages = checkpoint.data.generatedImages || [];
+
+    // Se não há imagens no checkpoint, tenta carregar do IndexedDB
+    if (recoveredImages.length === 0) {
+      try {
+        if (!imageStorageRef.current) {
+          imageStorageRef.current = new ImageStorage();
+          await imageStorageRef.current.init();
+        }
+        const storedImages = await imageStorageRef.current.getAllImages();
+        if (storedImages.length > 0) {
+          recoveredImages = storedImages.sort((a, b) => a.segmentIndex - b.segmentIndex);
+          console.log(`📂 Recuperadas ${recoveredImages.length} imagens do IndexedDB`);
+        }
+      } catch (e) {
+        console.error('Erro ao carregar imagens do IndexedDB:', e);
+      }
+    }
+
+    setGeneratedImages(recoveredImages);
+
+    // Definir step e mensagem baseado no estado recuperado
+    if (recoveredImages.length > 0) {
+      setCurrentStep('composing');
+      setStatusMessage(`📂 ${recoveredImages.length} imagens recuperadas! Selecione o áudio para criar o vídeo.`);
+    } else if (checkpoint.progress >= 30) {
+      setCurrentStep('composing');
+      setStatusMessage('📂 Progresso recuperado! Selecione o áudio para continuar.');
+    } else {
+      setCurrentStep('upload');
+      setStatusMessage('📂 Progresso recuperado!');
+    }
+
     setHasCheckpoint(false);
   };
+  // ANCHOR_END: Handle Recover Progress
 
+  // ANCHOR: Save Checkpoint
+  // DESC: Salva progresso atual para recuperação futura
+  // WHY: Permite continuar de onde parou após interrupção
+  // DEPS: CheckpointManager, IndexedDB
   const saveCheckpoint = async (step: string, prog: number) => {
     if (!checkpointManagerRef.current) return;
     await checkpointManagerRef.current.autoSave(step, prog, {
@@ -172,21 +206,34 @@ const App: React.FC = () => {
       aspectRatio, theme: selectedTheme, audioFileName: audioFile?.name
     });
   };
+  // ANCHOR_END: Save Checkpoint
 
+  // ANCHOR: Handle File Select
+  // DESC: Processa seleção de arquivo de áudio
+  // WHY: Permite upload de áudio para criar vídeo
+  // USAGE: onChange do input type="file"
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type.startsWith('audio/')) {
       setAudioFile(file);
       setError(null);
-      setCurrentStep('upload');
-      setGeneratedImages([]);
-      setVideoUrl(null);
-      setGlobalContext(null);
-      setNarrative(null);
+
+      // Se estiver na tela de composing (recuperação), não resetar imagens
+      if (currentStep === 'composing' && generatedImages.length > 0) {
+        setStatusMessage('✅ Áudio selecionado! Pronto para criar vídeo.');
+      } else {
+        // Reset completo para novo projeto
+        setCurrentStep('upload');
+        setGeneratedImages([]);
+        setVideoUrl(null);
+        setGlobalContext(null);
+        setNarrative(null);
+      }
     } else {
       setError('Por favor, selecione um arquivo de áudio válido');
     }
   };
+  // ANCHOR_END: Handle File Select
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); };
   const handleDrop = (e: React.DragEvent) => {
@@ -463,6 +510,10 @@ const App: React.FC = () => {
     }
   };
 
+  // ANCHOR: Handle Reset
+  // DESC: Reseta toda a aplicação para estado inicial
+  // WHY: Permitir criar novo projeto do zero
+  // USAGE: Chamado pelo botão "Criar Novo" e menu "Novo Projeto"
   const handleReset = async () => {
     setAudioFile(null);
     setCurrentStep('upload');
@@ -481,6 +532,7 @@ const App: React.FC = () => {
       setHasCheckpoint(false);
     }
   };
+  // ANCHOR_END: Handle Reset
 
   const handleDeleteImage = async (id: string) => {
     if (imageStorageRef.current) {
@@ -847,11 +899,41 @@ const App: React.FC = () => {
                   <div style={{ width: `${progress}%`, height: '100%', background: currentTheme.gradient, transition: 'width 0.3s ease' }} />
                 </div>
                 <p style={{ color: '#666', marginTop: '10px', fontSize: '14px' }}>{progress.toFixed(0)}% • {generatedImages.length} imagens salvas</p>
-                {generatedImages.length > 0 && !videoUrl && currentStep !== 'done' && (
+
+                {/* ANCHOR: Audio Upload for Recovery */}
+                {/* DESC: Permite upload de áudio quando recuperando progresso */}
+                {!audioFile && generatedImages.length > 0 && (
+                  <div style={{ background: '#fef3c7', padding: '20px', borderRadius: '12px', marginTop: '20px', border: '2px solid #f59e0b' }}>
+                    <p style={{ margin: '0 0 15px 0', color: '#92400e', fontWeight: 'bold' }}>
+                      📁 Selecione o áudio para criar o vídeo:
+                    </p>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        border: '2px dashed #f59e0b',
+                        borderRadius: '8px',
+                        padding: '20px',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        background: '#fffbeb',
+                      }}
+                    >
+                      <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎵</div>
+                      <p style={{ margin: 0, color: '#92400e' }}>Clique para selecionar o áudio</p>
+                      <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#b45309' }}>MP3, WAV, OGG, M4A</p>
+                    </div>
+                  </div>
+                )}
+                {/* ANCHOR_END: Audio Upload for Recovery */}
+
+                {/* ANCHOR: Create Video Button */}
+                {generatedImages.length > 0 && audioFile && !videoUrl && currentStep !== 'done' && (
                   <button onClick={handleCreateVideoFromRecovered} style={{ width: '100%', padding: '20px', marginTop: '20px', background: currentTheme.gradient, color: 'white', border: 'none', borderRadius: '12px', fontSize: '20px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 15px rgba(102,126,234,0.4)', transition: 'transform 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'} onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}>
-                    Criar Video Agora ({generatedImages.length} imagens prontas)
+                    🎬 Criar Video Agora ({generatedImages.length} imagens prontas)
                   </button>
                 )}
+                {/* ANCHOR_END: Create Video Button */}
                 {generatedImages.length > 0 && (
                   <div style={{ marginTop: '30px', textAlign: 'left' }}>
                     <ImageGallery images={generatedImages} onDelete={handleDeleteImage} onClearAll={handleClearAllImages} onRegenerate={handleRegenerateImage} onUpload={handleUploadImage} onUpdateAnimation={handleUpdateAnimation} />
