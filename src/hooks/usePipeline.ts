@@ -66,18 +66,35 @@ export function usePipeline({
     try {
       setError(null);
       await saveCheckpoint('starting', 0, {});
+
+      const keyTrimmed = transcriptionApiKey?.trim() ?? '';
+      const isOpenAI = transcriptionProvider === 'openai';
+      const isGroq = transcriptionProvider === 'groq';
+      const openAIKeyLooksValid = /^sk-/.test(keyTrimmed);
+
+      let effectiveTranscriptionProvider = transcriptionProvider;
+      if (isOpenAI && !openAIKeyLooksValid) {
+        effectiveTranscriptionProvider = 'disabled';
+        setStatusMessage('🎧 Analisando áudio sem transcrição (chave OpenAI ausente/inválida).');
+      } else if (isGroq && !keyTrimmed) {
+        effectiveTranscriptionProvider = 'disabled';
+        setStatusMessage('🎧 Analisando áudio sem transcrição (Groq sem chave).');
+      } else {
+        setStatusMessage(effectiveTranscriptionProvider !== 'disabled' ? '🎤 Transcrevendo...' : '🎧 Analisando áudio...');
+      }
+
       setCurrentStep('analyzing');
       setProgress(5);
-      setStatusMessage(transcriptionProvider !== 'disabled' ? `🎤 Transcrevendo...` : '🎧 Analisando áudio...');
 
       audioAnalyzerRef.current = new AudioAnalyzer();
       const analysis = await audioAnalyzerRef.current.analyzeAudio(audioFile, {
-        transcribe: transcriptionProvider !== 'disabled' && transcriptionProvider !== 'filename',
-        analyzeNarrative: transcriptionProvider !== 'disabled',
-        useFilename: transcriptionProvider === 'filename' || transcriptionProvider !== 'disabled',
-        transcriptionProvider,
-        transcriptionApiKey,
+        transcribe: effectiveTranscriptionProvider !== 'disabled' && effectiveTranscriptionProvider !== 'filename',
+        analyzeNarrative: effectiveTranscriptionProvider !== 'disabled',
+        useFilename: effectiveTranscriptionProvider === 'filename' || effectiveTranscriptionProvider !== 'disabled',
+        transcriptionProvider: effectiveTranscriptionProvider,
+        transcriptionApiKey: keyTrimmed,
       });
+
       setAudioAnalysis(analysis);
       if (analysis.narrative) setNarrative(analysis.narrative);
       setProgress(20);
