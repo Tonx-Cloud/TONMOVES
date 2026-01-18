@@ -20,6 +20,7 @@ import { Card } from './ui/design-system/Card';
 import { Button } from './ui/design-system/Button';
 import { Banner } from './ui/design-system/Banner';
 import { Badge } from './ui/design-system/Badge';
+import { PlanBar } from './ui/design-system/PlanBar';
 
 const IMAGE_PROVIDERS = IMAGE_PROVIDERS_LIST;
 const VIDEO_PROVIDERS = VIDEO_PROVIDERS_LIST;
@@ -538,6 +539,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="app-max">
+        <PlanBar plan="free" onUpgrade={() => setCurrentView('settings')} />
         {renderContent()}
       </main>
     </div>
