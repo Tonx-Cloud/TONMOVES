@@ -127,11 +127,11 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F4-T04 — Validação de pagamento e liberação PRO para um render específico
   Depends on: F4-T03
   Acceptance: pagamento confirmado libera 1 render PRO; estado persistido no backend
-  Status: TODO
+  Status: DONE (mock)
 - [ ] F4-T05 — /api/me inclui entitlement de render PRO avulso
   Depends on: F4-T04
   Acceptance: frontend recebe flag de render PRO disponível; expiração/regra clara
-  Status: TODO
+  Status: DONE (mock)
 
 ### FASE 5 — Fluxo PRO (clipes VO2 curtos + edição)
 - [ ] F5-T01 — Segmentação da música em blocos/beat para clipes curtos

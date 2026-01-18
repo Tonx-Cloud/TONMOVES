@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
   const [plan, setPlan] = useState<'free' | 'pro'>('free');
+  const [entitlement, setEntitlement] = useState<string | null>(null);
 
 
   const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
@@ -557,7 +558,7 @@ const App: React.FC = () => {
             <Badge tone="warn">PIX Mercado Pago</Badge>
             <Badge tone="accent">Libera 1 render PRO (1080p, sem watermark)</Badge>
           </div>
-          <Button variant="primary" size="lg" onClick={() => { setPlan('pro'); setShowPaywall(false); }}>
+          <Button variant="primary" size="lg" onClick={() => { setPlan('pro'); setEntitlement('single-render'); setShowPaywall(false); }}>
             Marcar PRO (mock)
           </Button>
           <Button variant="ghost" onClick={() => setShowPaywall(false)}>
