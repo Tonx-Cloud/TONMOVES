@@ -214,6 +214,7 @@ const App: React.FC = () => {
         return (
           <div className="grid-2">
             <div className="stack-vertical">
+              <PlanBar plan="free" onUpgrade={() => setCurrentView('settings')} />
               {hasCheckpoint && currentStep === 'upload' && (
                 <Banner
                   tone="info"
