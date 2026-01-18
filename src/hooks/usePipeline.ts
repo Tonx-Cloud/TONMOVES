@@ -145,126 +145,55 @@ export function usePipeline({
 
       const images: StoredImage[] = [];
 
-      // MODO VÍDEOS PEXELS
-      if (selectedVideoProvider === 'pexels' && apiKeys.pexels) {
-        setStatusMessage(`🎬 Buscando ${prompts.length} clipes de vídeo no Pexels...`);
-        const searchQueries = prompts.map(p => p.prompt.split(' ').slice(0, 3).join(' '));
+      // MODO IMAGENS (apenas OpenAI/Gemini no fluxo atual)
+      setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
+      const BATCH_SIZE = 2;
+      const DELAY_BETWEEN_BATCHES = 500;
 
-        for (let i = 0; i < searchQueries.length; i++) {
-          try {
-            setStatusMessage(`📹 Buscando vídeo ${i + 1}/${searchQueries.length}: "${searchQueries[i]}"...`);
-            const videos = await searchPexelsVideos(searchQueries[i], apiKeys.pexels, 1);
+      for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
+        const batch = prompts.slice(batchStart, batchEnd);
+        setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
+        try {
+          const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
+            const globalIndex = batchStart + batchIndex;
+            const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
 
-            const selectedVideo = videos[0];
-            if (selectedVideo) {
-              const storedVideo: StoredImage = {
-                id: `video-${Date.now()}-${i}`,
-                url: selectedVideo.url,
-                prompt: prompts[i].prompt,
-                timestamp: Date.now(),
-                segmentIndex: i,
-              };
-              images.push(storedVideo);
-              await imageStorageRef.current!.saveImage(storedVideo);
-            }
-
-            setGeneratedImages([...images]);
-            const vidProgress = 30 + ((i + 1) / searchQueries.length) * 45;
-            setProgress(vidProgress);
-            await saveCheckpoint(`video-${i}`, vidProgress, {
-              audioAnalysis: analysis,
-              globalContext: prompts[0]?.globalContext ?? null,
-              narrative: analysis.narrative ?? null,
-              generatedImages: images,
-              aspectRatio,
-              selectedTheme,
-            });
-
-            if (i < searchQueries.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          } catch (videoError) {
-            console.error(`Erro ao buscar vídeo ${i}:`, videoError);
-          }
-        }
-
-        setStatusMessage(`✅ ${images.length} clipes de vídeo encontrados!`);
-      } else {
-        // MODO IMAGENS
-        setStatusMessage(`🎨 Gerando ${prompts.length} imagens (2 por vez para evitar sobrecarga)...`);
-        const BATCH_SIZE = 2;
-        const DELAY_BETWEEN_BATCHES = 500;
-
-        for (let batchStart = 0; batchStart < prompts.length; batchStart += BATCH_SIZE) {
-          const batchEnd = Math.min(batchStart + BATCH_SIZE, prompts.length);
-          const batch = prompts.slice(batchStart, batchEnd);
-          setStatusMessage(`🚀 Gerando imagens ${batchStart + 1}-${batchEnd} de ${prompts.length}...`);
-          try {
-            const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
-              const globalIndex = batchStart + batchIndex;
-              const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
-
-              let blob: Blob | undefined;
-              let finalUrl = imageUrl;
-
-              if (imageUrl.startsWith('blob:')) {
-                try {
-                  const response = await fetch(imageUrl);
-                  blob = await response.blob();
-                  console.log(`💾 Blob salvo para imagem ${globalIndex + 1}`);
-                } catch (e) {
-                  console.warn('Não foi possível salvar blob:', e);
-                }
-              } else if (imageUrl.startsWith('https://image.pollinations.ai/')) {
-                try {
-                  const response = await fetch(imageUrl);
-                  if (response.ok) {
-                    blob = await response.blob();
-                    finalUrl = URL.createObjectURL(blob);
-                    console.log(`💾 Pollinations imagem convertida para blob ${globalIndex + 1}`);
-                  }
-                } catch (e) {
-                  console.warn('Não foi possível baixar imagem do Pollinations:', e);
-                }
-              }
-
-              const storedImage: StoredImage = {
-                id: `img-${Date.now()}-${globalIndex}`,
-                url: finalUrl,
-                blob: blob,
-                prompt: imagePrompt.prompt,
-                timestamp: Date.now(),
-                segmentIndex: globalIndex,
-              };
-              await imageStorageRef.current!.saveImage(storedImage);
-              return storedImage;
-            }));
-            images.push(...batchResults);
-            setGeneratedImages([...images]);
-            const imgProgress = 30 + (images.length / prompts.length) * 45;
-            setProgress(imgProgress);
-            await saveCheckpoint(`batch-${batchEnd}`, imgProgress, {
-              audioAnalysis: analysis,
-              globalContext: prompts[0]?.globalContext ?? null,
-              narrative: analysis.narrative ?? null,
-              generatedImages: images,
-              aspectRatio,
-              selectedTheme,
-            });
-            if (batchEnd < prompts.length) await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
-          } catch (batchError) {
-            console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
-            setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
-            await saveCheckpoint(`error-batch-${batchEnd}`, 30 + (images.length / prompts.length) * 45, {
-              audioAnalysis: analysis,
-              globalContext: prompts[0]?.globalContext ?? null,
-              narrative: analysis.narrative ?? null,
-              generatedImages: images,
-              aspectRatio,
-              selectedTheme,
-            });
-            throw batchError;
-          }
+            const storedImage: StoredImage = {
+              id: `img-${Date.now()}-${globalIndex}`,
+              url: imageUrl,
+              prompt: imagePrompt.prompt,
+              timestamp: Date.now(),
+              segmentIndex: globalIndex,
+            };
+            await imageStorageRef.current!.saveImage(storedImage);
+            return storedImage;
+          }));
+          images.push(...batchResults);
+          setGeneratedImages([...images]);
+          const imgProgress = 30 + (images.length / prompts.length) * 45;
+          setProgress(imgProgress);
+          await saveCheckpoint(`batch-${batchEnd}`, imgProgress, {
+            audioAnalysis: analysis,
+            globalContext: prompts[0]?.globalContext ?? null,
+            narrative: analysis.narrative ?? null,
+            generatedImages: images,
+            aspectRatio,
+            selectedTheme,
+          });
+          if (batchEnd < prompts.length) await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
+        } catch (batchError) {
+          console.error(`Erro no batch ${batchStart}-${batchEnd}:`, batchError);
+          setError(`⚠️ Erro ao gerar imagens, mas ${images.length} foram salvas!`);
+          await saveCheckpoint(`error-batch-${batchEnd}`, 30 + (images.length / prompts.length) * 45, {
+            audioAnalysis: analysis,
+            globalContext: prompts[0]?.globalContext ?? null,
+            narrative: analysis.narrative ?? null,
+            generatedImages: images,
+            aspectRatio,
+            selectedTheme,
+          });
+          throw batchError;
         }
       }
 
@@ -304,6 +233,7 @@ export function usePipeline({
         aspectRatio,
         selectedTheme,
       });
+
 
     } catch (err) {
       console.error('Erro:', err);
