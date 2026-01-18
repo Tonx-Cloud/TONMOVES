@@ -1,7 +1,9 @@
 /**
  * Video Generator - APIs de geração de vídeo com IA
- * Suporta: RunwayML Gen-3, Luma Dream Machine, Stability AI
+ * Suporta: RunwayML Gen-4, Luma Dream Machine, Stability AI
  */
+
+import { logger } from './logger';
 
 export type VideoAIProvider = 'runwayml' | 'lumaai' | 'stability';
 
@@ -17,54 +19,99 @@ export interface VideoGenerationOptions {
   aspectRatio?: '16:9' | '9:16' | '1:1';
 }
 
-// ===== RUNWAY ML GEN-3 =====
-// Documentação: https://docs.runwayml.com/
+// ===== RUNWAY ML GEN-4 =====
+// Documentação: https://docs.dev.runwayml.com/api/
 
 export async function generateVideoRunwayML(
   imageUrl: string,
   apiKey: string,
   options: VideoGenerationOptions = {}
 ): Promise<GeneratedVideo> {
-  const { prompt = '', duration = 4 } = options;
+  const { prompt = '', duration = 5, aspectRatio = '16:9' } = options;
 
-  console.log('🎬 RunwayML: Iniciando geração de vídeo...');
+  logger.video.starting('RunwayML', imageUrl);
+
+  // Mapear aspect ratio para formato Runway
+  const ratioMap: Record<string, string> = {
+    '16:9': '1280:720',
+    '9:16': '720:1280',
+    '1:1': '960:960',
+  };
+  const ratio = ratioMap[aspectRatio] || '1280:720';
+
+  // Verificar se a imagem é uma URL válida ou precisa ser convertida para base64
+  let promptImageValue: string | { uri: string; position: string };
+
+  if (imageUrl.startsWith('data:image/')) {
+    // Já é base64
+    promptImageValue = imageUrl;
+  } else if (imageUrl.startsWith('https://')) {
+    // URL HTTPS válida - usar formato de objeto com position
+    promptImageValue = {
+      uri: imageUrl,
+      position: 'first',
+    };
+  } else if (imageUrl.startsWith('blob:')) {
+    // Blob URL - precisa converter para base64
+    logger.debug('VIDEO', 'Convertendo blob para base64...');
+    const response = await fetch(imageUrl);
+    const blob = await response.blob();
+    const base64 = await blobToBase64(blob);
+    promptImageValue = base64;
+  } else {
+    const errorMsg = `RunwayML: Formato de imagem não suportado: ${imageUrl.substring(0, 50)}...`;
+    logger.video.error(errorMsg, { imageUrl: imageUrl.substring(0, 100) });
+    throw new Error(errorMsg);
+  }
 
   // 1. Criar tarefa de geração
-  const createResponse = await fetch('https://api.runwayml.com/v1/image-to-video', {
+  // Endpoint correto: /v1/image_to_video (underscore, não hífen)
+  const requestBody = {
+    model: 'gen4_turbo',
+    promptImage: promptImageValue,
+    promptText: prompt || 'smooth cinematic motion, high quality, professional video',
+    ratio: ratio,
+    duration: Math.min(Math.max(duration, 2), 10), // 2-10 segundos
+    seed: Math.floor(Math.random() * 4294967295),
+  };
+
+  logger.api.request('POST', 'https://api.dev.runwayml.com/v1/image_to_video', {
+    model: requestBody.model,
+    ratio: requestBody.ratio,
+    duration: requestBody.duration,
+    promptText: requestBody.promptText?.substring(0, 50),
+  });
+
+  const createResponse = await fetch('https://api.dev.runwayml.com/v1/image_to_video', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'X-Runway-Version': '2024-11-06',
     },
-    body: JSON.stringify({
-      model: 'gen3a_turbo',
-      promptImage: imageUrl,
-      promptText: prompt || 'smooth cinematic motion, high quality',
-      duration: duration, // 5 ou 10 segundos
-      watermark: false,
-      seed: Math.floor(Math.random() * 1000000),
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!createResponse.ok) {
     const error = await createResponse.text();
+    logger.api.error('https://api.dev.runwayml.com/v1/image_to_video', createResponse.status, error);
+    logger.video.error(`RunwayML erro: ${createResponse.status}`, { response: error });
     throw new Error(`RunwayML erro: ${createResponse.status} - ${error}`);
   }
 
   const createData = await createResponse.json();
   const taskId = createData.id;
 
-  console.log(`🎬 RunwayML: Tarefa criada (${taskId}), aguardando...`);
+  logger.video.taskCreated(taskId, 'RunwayML');
 
-  // 2. Polling para verificar status
+  // 2. Polling para verificar status (mínimo 5 segundos entre checks)
   let attempts = 0;
   const maxAttempts = 60; // 5 minutos máximo
 
   while (attempts < maxAttempts) {
     await new Promise(resolve => setTimeout(resolve, 5000)); // 5 segundos
 
-    const statusResponse = await fetch(`https://api.runwayml.com/v1/tasks/${taskId}`, {
+    const statusResponse = await fetch(`https://api.dev.runwayml.com/v1/tasks/${taskId}`, {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'X-Runway-Version': '2024-11-06',
@@ -78,18 +125,20 @@ export async function generateVideoRunwayML(
     const statusData = await statusResponse.json();
 
     if (statusData.status === 'SUCCEEDED') {
-      console.log('✅ RunwayML: Vídeo gerado com sucesso!');
+      logger.video.completed(taskId, statusData.output?.[0] || 'no-url');
       return {
         url: statusData.output[0],
         duration: duration,
         provider: 'runwayml',
       };
     } else if (statusData.status === 'FAILED') {
-      throw new Error(`RunwayML falhou: ${statusData.failure || 'Erro desconhecido'}`);
+      const errorMsg = statusData.failure || statusData.failureCode || 'Erro desconhecido';
+      logger.video.error(`RunwayML falhou: ${errorMsg}`, { taskId, statusData });
+      throw new Error(`RunwayML falhou: ${errorMsg}`);
     }
 
     attempts++;
-    console.log(`⏳ RunwayML: Aguardando... (${attempts}/${maxAttempts})`);
+    logger.video.polling(taskId, attempts, statusData.status);
   }
 
   throw new Error('RunwayML timeout: Geração demorou muito');
@@ -105,7 +154,7 @@ export async function generateVideoLumaAI(
 ): Promise<GeneratedVideo> {
   const { prompt = '', aspectRatio = '16:9' } = options;
 
-  console.log('🌙 Luma AI: Iniciando geração de vídeo...');
+  logger.video.starting('Luma AI', imageUrl);
 
   // 1. Criar geração
   const createResponse = await fetch('https://api.lumalabs.ai/dream-machine/v1/generations', {
@@ -129,13 +178,15 @@ export async function generateVideoLumaAI(
 
   if (!createResponse.ok) {
     const error = await createResponse.text();
+    logger.api.error('https://api.lumalabs.ai/dream-machine/v1/generations', createResponse.status, error);
+    logger.video.error(`Luma AI erro: ${createResponse.status}`, { response: error });
     throw new Error(`Luma AI erro: ${createResponse.status} - ${error}`);
   }
 
   const createData = await createResponse.json();
   const generationId = createData.id;
 
-  console.log(`🌙 Luma AI: Geração criada (${generationId}), aguardando...`);
+  logger.video.taskCreated(generationId, 'Luma AI');
 
   // 2. Polling para verificar status
   let attempts = 0;
@@ -157,18 +208,20 @@ export async function generateVideoLumaAI(
     const statusData = await statusResponse.json();
 
     if (statusData.state === 'completed') {
-      console.log('✅ Luma AI: Vídeo gerado com sucesso!');
+      logger.video.completed(generationId, statusData.assets?.video || 'no-url');
       return {
         url: statusData.assets.video,
         duration: 5, // Luma gera vídeos de ~5 segundos
         provider: 'lumaai',
       };
     } else if (statusData.state === 'failed') {
-      throw new Error(`Luma AI falhou: ${statusData.failure_reason || 'Erro desconhecido'}`);
+      const errorMsg = statusData.failure_reason || 'Erro desconhecido';
+      logger.video.error(`Luma AI falhou: ${errorMsg}`, { generationId, statusData });
+      throw new Error(`Luma AI falhou: ${errorMsg}`);
     }
 
     attempts++;
-    console.log(`⏳ Luma AI: Aguardando... (${attempts}/${maxAttempts})`);
+    logger.video.polling(generationId, attempts, statusData.state);
   }
 
   throw new Error('Luma AI timeout: Geração demorou muito');
@@ -182,7 +235,7 @@ export async function generateVideoStabilityAI(
   apiKey: string,
   options: VideoGenerationOptions = {}
 ): Promise<GeneratedVideo> {
-  console.log('🎞️ Stability AI: Iniciando geração de vídeo...');
+  logger.video.starting('Stability AI', imageUrl);
 
   // 1. Baixar a imagem e converter para base64
   const imageResponse = await fetch(imageUrl);
@@ -206,13 +259,15 @@ export async function generateVideoStabilityAI(
 
   if (!createResponse.ok) {
     const error = await createResponse.text();
+    logger.api.error('https://api.stability.ai/v2beta/image-to-video', createResponse.status, error);
+    logger.video.error(`Stability AI erro: ${createResponse.status}`, { response: error });
     throw new Error(`Stability AI erro: ${createResponse.status} - ${error}`);
   }
 
   const createData = await createResponse.json();
   const generationId = createData.id;
 
-  console.log(`🎞️ Stability AI: Geração criada (${generationId}), aguardando...`);
+  logger.video.taskCreated(generationId, 'Stability AI');
 
   // 3. Polling para verificar status
   let attempts = 0;
@@ -231,7 +286,7 @@ export async function generateVideoStabilityAI(
     if (statusResponse.status === 202) {
       // Ainda processando
       attempts++;
-      console.log(`⏳ Stability AI: Aguardando... (${attempts}/${maxAttempts})`);
+      logger.video.polling(generationId, attempts, 'processing');
       continue;
     }
 
@@ -240,7 +295,7 @@ export async function generateVideoStabilityAI(
       const videoBlob = await statusResponse.blob();
       const videoUrl = URL.createObjectURL(videoBlob);
 
-      console.log('✅ Stability AI: Vídeo gerado com sucesso!');
+      logger.video.completed(generationId, videoUrl);
       return {
         url: videoUrl,
         duration: 4, // Stability gera vídeos de ~4 segundos
@@ -248,6 +303,7 @@ export async function generateVideoStabilityAI(
       };
     }
 
+    logger.api.error(`https://api.stability.ai/v2beta/image-to-video/result/${generationId}`, statusResponse.status, 'Status check failed');
     throw new Error(`Stability AI status erro: ${statusResponse.status}`);
   }
 

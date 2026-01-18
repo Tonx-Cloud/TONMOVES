@@ -1,3 +1,5 @@
+import { logger } from './logger';
+
 export interface AudioSegment {
   startTime: number;
   endTime: number;
@@ -63,18 +65,36 @@ export class AudioAnalyzer {
 
       // Transcrever com o provider selecionado
       if (options.transcribe && options.transcriptionProvider && options.transcriptionProvider !== 'disabled' && options.transcriptionProvider !== 'filename') {
+        // Validar API key
+        const apiKey = options.transcriptionApiKey?.trim();
+        if (!apiKey || apiKey.length < 10) {
+          const errorMsg = `API Key do ${options.transcriptionProvider === 'groq' ? 'Groq' : 'OpenAI'} não configurada ou inválida. Vá em Configurações e insira uma API Key válida.`;
+          logger.error('TRANSCRIPTION', errorMsg);
+          throw new Error(errorMsg);
+        }
+
         try {
           let transcription = '';
 
-          if (options.transcriptionProvider === 'groq' && options.transcriptionApiKey) {
-            console.log('🎤 Transcrevendo com Groq Whisper...');
-            transcription = await this.transcribeWithGroq(audioFile, options.transcriptionApiKey);
-          } else if (options.transcriptionProvider === 'openai' && options.transcriptionApiKey) {
-            console.log('🎤 Transcrevendo com OpenAI Whisper...');
-            transcription = await this.transcribeWithOpenAI(audioFile, options.transcriptionApiKey);
+          if (options.transcriptionProvider === 'groq') {
+            logger.info('TRANSCRIPTION', 'Iniciando transcrição com Groq Whisper...', {
+              fileSize: `${(audioFile.size / 1024 / 1024).toFixed(2)} MB`,
+              fileName: audioFile.name,
+            });
+            transcription = await this.transcribeWithGroq(audioFile, apiKey);
+          } else if (options.transcriptionProvider === 'openai') {
+            logger.info('TRANSCRIPTION', 'Iniciando transcrição com OpenAI Whisper...', {
+              fileSize: `${(audioFile.size / 1024 / 1024).toFixed(2)} MB`,
+              fileName: audioFile.name,
+            });
+            transcription = await this.transcribeWithOpenAI(audioFile, apiKey);
           }
 
           if (transcription) {
+            logger.info('TRANSCRIPTION', 'Transcrição concluída', {
+              length: transcription.length,
+              preview: transcription.substring(0, 100),
+            });
             analysis.fullTranscription = transcription;
             analysis.segments = this.addTranscriptionToSegments(
               analysis.segments,
@@ -83,7 +103,21 @@ export class AudioAnalyzer {
             );
           }
         } catch (error) {
-          console.warn('Erro na transcrição:', error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          logger.error('TRANSCRIPTION', 'Erro na transcrição', errorMessage, {
+            provider: options.transcriptionProvider,
+            fileSize: audioFile.size,
+          });
+
+          // Re-throw com mensagem amigável
+          if (errorMessage.includes('401') || errorMessage.includes('invalid_api_key') || errorMessage.includes('Invalid API Key')) {
+            throw new Error(`❌ API Key do ${options.transcriptionProvider === 'groq' ? 'Groq' : 'OpenAI'} inválida. Verifique sua chave em Configurações.`);
+          } else if (errorMessage.includes('429')) {
+            throw new Error(`⏳ Limite de requisições excedido. Aguarde alguns minutos e tente novamente.`);
+          } else if (errorMessage.includes('413') || errorMessage.includes('too large')) {
+            throw new Error(`📁 Arquivo muito grande para transcrição. Máximo: 25MB para Groq/OpenAI.`);
+          }
+          throw error;
         }
       }
 
@@ -228,6 +262,13 @@ export class AudioAnalyzer {
 
   // Groq Whisper API (gratuito)
   private async transcribeWithGroq(audioFile: File, apiKey: string): Promise<string> {
+    logger.api.request('POST', 'https://api.groq.com/openai/v1/audio/transcriptions', {
+      model: 'whisper-large-v3',
+      language: 'pt',
+      fileSize: `${(audioFile.size / 1024 / 1024).toFixed(2)} MB`,
+      apiKeyPreview: `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}`,
+    });
+
     const formData = new FormData();
     formData.append('file', audioFile);
     formData.append('model', 'whisper-large-v3');
@@ -243,17 +284,39 @@ export class AudioAnalyzer {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Groq API error: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      logger.api.error('https://api.groq.com/openai/v1/audio/transcriptions', response.status, errorText);
+
+      // Parse error para mensagem mais clara
+      let errorDetail = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetail = errorJson.error?.message || errorText;
+      } catch {}
+
+      if (response.status === 401) {
+        throw new Error(`Groq API Key inválida. Verifique se a chave está correta em console.groq.com`);
+      }
+      throw new Error(`Groq API error: ${response.status} - ${errorDetail}`);
     }
 
     const data = await response.json();
-    console.log('✅ Transcrição Groq concluída:', data.text?.substring(0, 100) + '...');
+    logger.info('TRANSCRIPTION', 'Groq Whisper concluído', {
+      textLength: data.text?.length || 0,
+      preview: data.text?.substring(0, 100),
+    });
     return data.text || '';
   }
 
   // OpenAI Whisper API (pago)
   private async transcribeWithOpenAI(audioFile: File, apiKey: string): Promise<string> {
+    logger.api.request('POST', 'https://api.openai.com/v1/audio/transcriptions', {
+      model: 'whisper-1',
+      language: 'pt',
+      fileSize: `${(audioFile.size / 1024 / 1024).toFixed(2)} MB`,
+      apiKeyPreview: `${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}`,
+    });
+
     const formData = new FormData();
     formData.append('file', audioFile);
     formData.append('model', 'whisper-1');
@@ -269,12 +332,26 @@ export class AudioAnalyzer {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`OpenAI API error: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      logger.api.error('https://api.openai.com/v1/audio/transcriptions', response.status, errorText);
+
+      let errorDetail = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetail = errorJson.error?.message || errorText;
+      } catch {}
+
+      if (response.status === 401) {
+        throw new Error(`OpenAI API Key inválida. Verifique se a chave está correta em platform.openai.com`);
+      }
+      throw new Error(`OpenAI API error: ${response.status} - ${errorDetail}`);
     }
 
     const data = await response.json();
-    console.log('✅ Transcrição OpenAI concluída:', data.text?.substring(0, 100) + '...');
+    logger.info('TRANSCRIPTION', 'OpenAI Whisper concluído', {
+      textLength: data.text?.length || 0,
+      preview: data.text?.substring(0, 100),
+    });
     return data.text || '';
   }
 

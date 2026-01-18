@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { StoredImage, AnimationType } from '../utils/imageStorage';
+import { logger } from '../utils/logger';
 
 const ANIMATION_OPTIONS: { id: AnimationType; name: string; icon: string }[] = [
   { id: 'none', name: 'Sem animação', icon: '⏹️' },
@@ -38,6 +39,43 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
   const [showAnimationMenu, setShowAnimationMenu] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadTargetIndex, setUploadTargetIndex] = useState<number>(0);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
+
+  // Handler para erro de carregamento de imagem
+  const handleImageError = (imgId: string, imgUrl: string) => {
+    logger.image.loadError(imgId, imgUrl);
+    logger.error('IMAGE_GALLERY', `Falha ao carregar imagem`, imgUrl, {
+      imgId,
+      urlPrefix: imgUrl?.substring(0, 50),
+      urlLength: imgUrl?.length,
+      isDataUrl: imgUrl?.startsWith('data:'),
+      isHttps: imgUrl?.startsWith('https://'),
+      isBlob: imgUrl?.startsWith('blob:'),
+    });
+    setFailedImages(prev => new Set(prev).add(imgId));
+    setLoadingImages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imgId);
+      return newSet;
+    });
+  };
+
+  // Handler para imagem carregada com sucesso
+  const handleImageLoad = (imgId: string) => {
+    logger.image.loaded(imgId);
+    setLoadingImages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imgId);
+      return newSet;
+    });
+    // Remover da lista de falhas se estava la
+    setFailedImages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(imgId);
+      return newSet;
+    });
+  };
 
   if (images.length === 0) {
     return (
@@ -163,24 +201,57 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
               flexShrink: 0,
               width: '120px',
             }}>
-              <img
-                src={img.url}
-                alt={`Imagem ${index + 1}`}
-                style={{
-                  width: '120px',
-                  height: '160px',
-                  objectFit: 'cover',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => setExpandedId(expandedId === img.id ? null : img.id)}
-              />
+              {failedImages.has(img.id) || !img.url ? (
+                // Mostrar placeholder quando imagem falha ou URL está vazia
+                <div
+                  style={{
+                    width: '120px',
+                    height: '160px',
+                    borderRadius: '8px',
+                    background: !img.url
+                      ? 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)'
+                      : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: `2px dashed ${!img.url ? '#f59e0b' : '#ef4444'}`,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => handleUploadClick(img.segmentIndex)}
+                  title="Clique para fazer upload de uma imagem"
+                >
+                  <span style={{ fontSize: '24px', marginBottom: '4px' }}>{!img.url ? '🔄' : '⚠️'}</span>
+                  <span style={{ fontSize: '10px', color: !img.url ? '#b45309' : '#dc2626', textAlign: 'center', padding: '0 4px' }}>
+                    {!img.url ? 'Imagem perdida' : 'Erro ao carregar'}
+                  </span>
+                  <span style={{ fontSize: '9px', color: !img.url ? '#d97706' : '#ef4444', marginTop: '2px' }}>
+                    Clique para substituir
+                  </span>
+                </div>
+              ) : (
+                <img
+                  src={img.url}
+                  alt={`Imagem ${index + 1}`}
+                  style={{
+                    width: '120px',
+                    height: '160px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    background: '#f3f4f6',
+                  }}
+                  onClick={() => setExpandedId(expandedId === img.id ? null : img.id)}
+                  onError={() => handleImageError(img.id, img.url)}
+                  onLoad={() => handleImageLoad(img.id)}
+                />
+              )}
               {/* Numero */}
               <div style={{
                 position: 'absolute',
                 top: '6px',
                 left: '6px',
-                background: 'rgba(0,0,0,0.7)',
+                background: failedImages.has(img.id) ? 'rgba(220,38,38,0.9)' : 'rgba(0,0,0,0.7)',
                 color: 'white',
                 padding: '2px 8px',
                 borderRadius: '10px',
@@ -189,6 +260,22 @@ export const ImageGallery: React.FC<ImageGalleryProps> = ({
               }}>
                 #{index + 1}
               </div>
+              {/* Indicador de video se tiver videoUrl */}
+              {img.videoUrl && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '6px',
+                  right: '6px',
+                  background: 'rgba(34,197,94,0.9)',
+                  color: 'white',
+                  padding: '2px 6px',
+                  borderRadius: '6px',
+                  fontSize: '10px',
+                  fontWeight: 'bold',
+                }}>
+                  🎬 Video
+                </div>
+              )}
             </div>
 
             {/* Conteudo */}

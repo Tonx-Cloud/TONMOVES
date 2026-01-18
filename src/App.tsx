@@ -177,7 +177,24 @@ const App: React.FC = () => {
       }
     }
 
-    setGeneratedImages(recoveredImages);
+    // Recriar blob URLs a partir dos blobs salvos
+    const processedImages = recoveredImages.map((img) => {
+      // Se tem blob salvo, criar novo blob URL
+      if (img.blob) {
+        const newBlobUrl = URL.createObjectURL(img.blob);
+        console.log(`🔄 Recriando blob URL para imagem ${img.id}`);
+        return { ...img, url: newBlobUrl };
+      }
+      // Se a URL é um blob antigo (inválido após reload), marcar para re-download
+      if (img.url?.startsWith('blob:')) {
+        console.warn(`⚠️ Blob URL inválido para imagem ${img.id}, URL não pode ser recuperada`);
+        // Retornar com URL vazia para indicar erro
+        return { ...img, url: '' };
+      }
+      return img;
+    });
+
+    setGeneratedImages(processedImages);
 
     // Definir step e mensagem baseado no estado recuperado
     if (recoveredImages.length > 0) {
@@ -403,9 +420,40 @@ const App: React.FC = () => {
             const batchResults = await Promise.all(batch.map(async (imagePrompt, batchIndex) => {
               const globalIndex = batchStart + batchIndex;
               const imageUrl = await imageGeneratorRef.current!.generateImage(imagePrompt.prompt, selectedTheme);
+
+              // Se for blob URL, baixar o blob para salvar no IndexedDB
+              let blob: Blob | undefined;
+              let finalUrl = imageUrl;
+
+              if (imageUrl.startsWith('blob:')) {
+                try {
+                  const response = await fetch(imageUrl);
+                  blob = await response.blob();
+                  console.log(`💾 Blob salvo para imagem ${globalIndex + 1}`);
+                } catch (e) {
+                  console.warn('Não foi possível salvar blob:', e);
+                }
+              } else if (imageUrl.startsWith('https://image.pollinations.ai/')) {
+                // Pollinations: baixar e salvar como blob para evitar problemas futuros
+                try {
+                  const response = await fetch(imageUrl);
+                  if (response.ok) {
+                    blob = await response.blob();
+                    finalUrl = URL.createObjectURL(blob);
+                    console.log(`💾 Pollinations imagem convertida para blob ${globalIndex + 1}`);
+                  }
+                } catch (e) {
+                  console.warn('Não foi possível baixar imagem do Pollinations:', e);
+                }
+              }
+
               const storedImage: StoredImage = {
-                id: `img-${Date.now()}-${globalIndex}`, url: imageUrl, prompt: imagePrompt.prompt,
-                timestamp: Date.now(), segmentIndex: globalIndex,
+                id: `img-${Date.now()}-${globalIndex}`,
+                url: finalUrl,
+                blob: blob,
+                prompt: imagePrompt.prompt,
+                timestamp: Date.now(),
+                segmentIndex: globalIndex,
               };
               await imageStorageRef.current!.saveImage(storedImage);
               return storedImage;

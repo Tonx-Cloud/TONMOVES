@@ -1,4 +1,5 @@
 import type { AudioSegment, AudioAnalysis, NarrativeAnalysis } from './audioAnalyzer';
+import { logger } from './logger';
 
 export interface ImagePrompt {
   prompt: string;
@@ -360,26 +361,43 @@ export class ImageGenerator {
     // Adicionar timestamp para evitar cache
     const uniquePrompt = `${prompt}, unique variation ${Date.now()}`;
 
-    switch (provider) {
-      case 'pexels':
-        if (!apiKey) throw new Error('Pexels requer API key');
-        return this.searchPexelsPhoto(prompt, theme, apiKey);
+    logger.image.generating(prompt, provider);
 
-      case 'together':
-        if (!apiKey) throw new Error('Together AI requer API key');
-        return this.generateWithTogetherAI(uniquePrompt, apiKey);
+    try {
+      let imageUrl: string;
 
-      case 'openai':
-        if (!apiKey) throw new Error('OpenAI requer API key');
-        return this.generateWithOpenAI(uniquePrompt, apiKey);
+      switch (provider) {
+        case 'pexels':
+          if (!apiKey) throw new Error('Pexels requer API key');
+          imageUrl = await this.searchPexelsPhoto(prompt, theme, apiKey);
+          break;
 
-      case 'gemini':
-        if (!apiKey) throw new Error('Gemini requer API key');
-        return this.generateWithGemini(uniquePrompt, apiKey);
+        case 'together':
+          if (!apiKey) throw new Error('Together AI requer API key');
+          imageUrl = await this.generateWithTogetherAI(uniquePrompt, apiKey);
+          break;
 
-      case 'pollinations':
-      default:
-        return this.generateWithPollinations(uniquePrompt);
+        case 'openai':
+          if (!apiKey) throw new Error('OpenAI requer API key');
+          imageUrl = await this.generateWithOpenAI(uniquePrompt, apiKey);
+          break;
+
+        case 'gemini':
+          if (!apiKey) throw new Error('Gemini requer API key');
+          imageUrl = await this.generateWithGemini(uniquePrompt, apiKey);
+          break;
+
+        case 'pollinations':
+        default:
+          imageUrl = this.generateWithPollinations(uniquePrompt);
+          break;
+      }
+
+      logger.image.generated(imageUrl, provider);
+      return imageUrl;
+    } catch (error) {
+      logger.image.error(error instanceof Error ? error : String(error), { prompt, provider });
+      throw error;
     }
   }
 
@@ -417,7 +435,25 @@ export class ImageGenerator {
     if (!data.data?.[0]?.url) {
       throw new Error('Together AI: Resposta inválida, sem URL da imagem.');
     }
-    return data.data[0].url;
+
+    // Baixar a imagem e converter para blob URL para evitar CORS
+    const imageUrl = data.data[0].url;
+    logger.debug('IMAGE', 'Together AI: Baixando imagem para evitar CORS...', { url: imageUrl.substring(0, 60) });
+
+    try {
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`Erro ao baixar imagem: ${imageResponse.status}`);
+      }
+      const blob = await imageResponse.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      logger.debug('IMAGE', 'Together AI: Imagem convertida para blob URL', { blobUrl: blobUrl.substring(0, 50) });
+      return blobUrl;
+    } catch (downloadError) {
+      logger.warn('IMAGE', 'Together AI: Falha ao baixar, tentando URL direta', { error: String(downloadError) });
+      // Se falhar o download, retorna a URL original (pode funcionar em alguns casos)
+      return imageUrl;
+    }
   }
 
   private async generateWithOpenAI(prompt: string, apiKey: string): Promise<string> {
@@ -453,7 +489,24 @@ export class ImageGenerator {
     if (!data.data?.[0]?.url) {
       throw new Error('OpenAI: Resposta inválida, sem URL da imagem.');
     }
-    return data.data[0].url;
+
+    // Baixar a imagem e converter para blob URL para evitar CORS
+    const imageUrl = data.data[0].url;
+    logger.debug('IMAGE', 'OpenAI: Baixando imagem para evitar CORS...', { url: imageUrl.substring(0, 60) });
+
+    try {
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) {
+        throw new Error(`Erro ao baixar imagem: ${imageResponse.status}`);
+      }
+      const blob = await imageResponse.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      logger.debug('IMAGE', 'OpenAI: Imagem convertida para blob URL', { blobUrl: blobUrl.substring(0, 50) });
+      return blobUrl;
+    } catch (downloadError) {
+      logger.warn('IMAGE', 'OpenAI: Falha ao baixar, tentando URL direta', { error: String(downloadError) });
+      return imageUrl;
+    }
   }
 
   private async generateWithGemini(prompt: string, apiKey: string): Promise<string> {
