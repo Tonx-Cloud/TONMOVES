@@ -112,8 +112,17 @@ export function usePipeline({
       }
       setStatusMessage('Criando prompts visuais...');
 
-      const providerConfig: ProviderConfig = { provider: selectedProvider, apiKey: apiKeys[selectedProvider] || undefined };
+      const requiresKey = ['together', 'openai', 'gemini'];
+      const hasKey = Boolean(apiKeys[selectedProvider]);
+      const fallbackProvider = 'pollinations';
+      const effectiveProvider = requiresKey.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
+      if (effectiveProvider !== selectedProvider) {
+        setStatusMessage('🔒 Provider pago sem chave. Usando Pollinations (gratuito).');
+      }
+
+      const providerConfig: ProviderConfig = { provider: effectiveProvider, apiKey: apiKeys[effectiveProvider] || undefined };
       imageGeneratorRef.current = new ImageGenerator(providerConfig);
+
       await ensureStorage();
       const prompts = await imageGeneratorRef.current.generatePrompts(
         analysis.segments,
