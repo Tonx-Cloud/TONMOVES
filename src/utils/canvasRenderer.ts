@@ -4,6 +4,8 @@ type RenderParams = {
   aspectRatio: '16:9' | '9:16';
   fps?: number;
   onProgress?: (p: number) => void;
+  watermarkText?: string;
+  watermarkOpacity?: number;
 };
 
 function loadImage(url: string): Promise<HTMLImageElement> {
@@ -16,7 +18,7 @@ function loadImage(url: string): Promise<HTMLImageElement> {
   });
 }
 
-export async function renderCanvasVideo({ images, audioFile, aspectRatio, fps = 30, onProgress }: RenderParams): Promise<Blob> {
+export async function renderCanvasVideo({ images, audioFile, aspectRatio, fps = 30, onProgress, watermarkText = 'tonmovies.app', watermarkOpacity = 0.15 }: RenderParams): Promise<Blob> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('Canvas renderer requer ambiente de navegador');
   }
@@ -114,6 +116,20 @@ export async function renderCanvasVideo({ images, audioFile, aspectRatio, fps = 
     const dx = (width - drawW) / 2;
     const dy = (height - drawH) / 2;
     ctx.drawImage(img, dx, dy, drawW, drawH);
+
+    // Watermark central
+    const wm = watermarkText || '';
+    if (wm) {
+      ctx.save();
+      ctx.globalAlpha = watermarkOpacity;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 28px Inter, system-ui';
+      const textWidth = ctx.measureText(wm).width;
+      const tx = (width - textWidth) / 2;
+      const ty = height / 2;
+      ctx.fillText(wm, tx, ty);
+      ctx.restore();
+    }
 
     if (progress < 1) {
       requestAnimationFrame(drawFrame);

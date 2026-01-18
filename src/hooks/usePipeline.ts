@@ -283,6 +283,8 @@ export function usePipeline({
         audioFile,
         aspectRatio,
         fps: 24,
+        watermarkText: 'tonmovies.app',
+        watermarkOpacity: 0.15,
         onProgress: (p) => setProgress(90 + (p * 0.1)),
       });
       const videoObjectUrl = URL.createObjectURL(videoBlob);
