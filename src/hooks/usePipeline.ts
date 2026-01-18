@@ -10,6 +10,7 @@ import { ImageGenerator, searchPexelsVideos } from '../utils/imageGenerator';
 import { ImageStorage } from '../utils/imageStorage';
 import { VideoComposer } from '../utils/videoComposer';
 import { generateVideoFromImage } from '../utils/videoGenerator';
+import { renderCanvasVideo } from '../utils/canvasRenderer';
 
 interface PipelineDeps {
   setProgress: (p: number) => void;
@@ -273,80 +274,22 @@ export function usePipeline({
         selectedTheme,
       });
 
-      const isVideoAIMode = selectedVideoProvider === 'runwayml' || selectedVideoProvider === 'lumaai' || selectedVideoProvider === 'stability';
-
-      if (isVideoAIMode) {
-        const videoAIProvider = selectedVideoProvider as VideoAIProvider;
-        const videoAIKey = videoApiKeys[selectedVideoProvider];
-
-        if (!videoAIKey) {
-          throw new Error(`API key não configurada para ${selectedVideoProvider}`);
-        }
-
-        setStatusMessage(`🎬 Gerando vídeos com ${videoAIProvider}...`);
-        const generatedVideos: GeneratedVideo[] = [];
-
-        for (let i = 0; i < images.length; i++) {
-          try {
-            setStatusMessage(`🎥 Gerando vídeo ${i + 1}/${images.length} com IA...`);
-            setProgress(75 + ((i / images.length) * 20));
-
-            const videoResult = await generateVideoFromImage(
-              images[i].url,
-              videoAIProvider,
-              videoAIKey,
-              {
-                prompt: images[i].prompt,
-                duration: 4,
-                aspectRatio: aspectRatio === '9:16' ? '9:16' : '16:9',
-              }
-            );
-
-            generatedVideos.push(videoResult);
-            images[i] = {
-              ...images[i],
-              videoUrl: videoResult.url,
-            };
-
-            setGeneratedImages([...images]);
-            await saveCheckpoint(`video-ai-${i}`, 75 + ((i + 1) / images.length) * 20, {
-              audioAnalysis: analysis,
-              globalContext: prompts[0]?.globalContext ?? null,
-              narrative: analysis.narrative ?? null,
-              generatedImages: images,
-              aspectRatio,
-              selectedTheme,
-            });
-          } catch (videoError) {
-            console.error(`Erro ao gerar vídeo ${i}:`, videoError);
-            setStatusMessage(`⚠️ Erro no vídeo ${i + 1}, usando imagem original...`);
-          }
-        }
-
-        setStatusMessage(`✅ ${generatedVideos.length} vídeos IA gerados!`);
-      }
-
+      // Para testes FREE: render client-side via canvas/WebRTC MediaRecorder
       setCurrentStep('composing');
-      setStatusMessage('🎬 Criando vídeo final...');
-      videoComposerRef.current = new VideoComposer();
-      await videoComposerRef.current.load((p) => {
-        setProgress(95 + (p / 100) * 3);
-        if (p % 20 === 0) setStatusMessage(`🎬 FFmpeg... ${p}%`);
-      });
-      setStatusMessage('🎬 Renderizando vídeo...');
-      const videoOptions: VideoOptions = {
-        fps: 24, width: aspectRatio === '9:16' ? 720 : 1280,
-        height: aspectRatio === '9:16' ? 1280 : 720, audioFile, videoMode,
-      };
-      const videoBlob = await videoComposerRef.current.createVideo(images, videoOptions, (p) => {
-        setProgress(98 + (p / 100) * 2);
-        if (p % 25 === 0) setStatusMessage(`🎬 Renderizando... ${p}%`);
+      setStatusMessage('🎬 Renderizando vídeo (canvas)...');
+      setProgress(90);
+      const videoBlob = await renderCanvasVideo({
+        images,
+        audioFile,
+        aspectRatio,
+        fps: 24,
+        onProgress: (p) => setProgress(90 + (p * 0.1)),
       });
       const videoObjectUrl = URL.createObjectURL(videoBlob);
       setVideoUrl(videoObjectUrl);
       setProgress(100);
       setCurrentStep('done');
-      setStatusMessage('✅ Vídeo criado!');
+      setStatusMessage('✅ Vídeo criado (canvas)!');
       await saveCheckpoint('done', 100, {
         audioAnalysis: analysis,
         globalContext: prompts[0]?.globalContext ?? null,
@@ -355,6 +298,7 @@ export function usePipeline({
         aspectRatio,
         selectedTheme,
       });
+
     } catch (err) {
       console.error('Erro:', err);
       setError(err instanceof Error ? err.message : 'Erro desconhecido');

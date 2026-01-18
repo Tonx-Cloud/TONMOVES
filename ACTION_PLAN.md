@@ -77,17 +77,17 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F1-T03 — Reorganizar tela principal em seções (Áudio, Estilo, Export, Providers, Preview) com layout 2 colunas
   Depends on: F1-T02
   Acceptance: tela usa componentes base; layout responsivo; sem gradientes/emojis
-  Status: TODO
+  Status: DONE
 - [ ] F1-T04 — PlanBar e locks FREE vs PRO (chips, CTA Upgrade)
   Depends on: F1-T02
   Acceptance: plano exibido, limites listados, CTA upgrade visível; opções PRO desabilitadas com tooltip
-  Status: TODO
+  Status: DONE
 
 ### FASE 2 — Fluxo FREE (client-side, preview completo)
 - [ ] F2-T01 — Render client-side (canvas + MediaRecorder/WebCodecs) em baixa resolução
   Depends on: F1-T03
   Acceptance: usuário gera vídeo FREE 480p/720p com fps/duração limitados; exporta MP4/WebM; vídeo inteiro da música
-  Status: TODO
+  Status: DONE
 - [ ] F2-T02 — Watermark central obrigatória no FREE
   Depends on: F2-T01
   Acceptance: watermark texto “tonmovies.app” aplicada no canvas, opacidade baixa, não removível
