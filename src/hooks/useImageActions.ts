@@ -25,10 +25,17 @@ export function useImageActions({
 
   const ensureGenerator = () => {
     if (!imageGeneratorRef.current) {
+      const requiresKey = ['together', 'openai', 'gemini'];
+      const hasKey = Boolean(apiKeys[selectedProvider]);
+      const fallbackProvider = 'pollinations';
+      const effectiveProvider = requiresKey.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
       imageGeneratorRef.current = new ImageGenerator({
-        provider: selectedProvider as any,
-        apiKey: apiKeys[selectedProvider] || undefined,
+        provider: effectiveProvider as any,
+        apiKey: apiKeys[effectiveProvider] || undefined,
       });
+      if (effectiveProvider !== selectedProvider) {
+        setStatusMessage('🔒 Provider pago sem chave. Usando Pollinations (gratuito).');
+      }
     }
   };
 
