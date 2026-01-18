@@ -13,6 +13,7 @@ dist-ssr/
 *.sh
 backups_*/
 # root action plan
+# (mantido fora do repo)
 ACTION_PLAN.md
 
 

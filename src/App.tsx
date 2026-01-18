@@ -511,60 +511,38 @@ const App: React.FC = () => {
 
 
   return (
-    <div style={{ minHeight: '100vh', background: currentTheme.gradient, padding: '20px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', transition: 'background 0.5s ease' }}>
+    <div className="app-shell">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} setCurrentView={setCurrentView} onNewProject={handleReset} />
 
-      {/* Header */}
-      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', maxWidth: '1200px', margin: '0 auto 40px', textAlign: 'center', position: 'relative' }}>
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          style={{
-            position: 'absolute',
-            left: 0,
-            background: 'rgba(255,255,255,0.25)',
-            border: '2px solid rgba(255,255,255,0.3)',
-            color: 'white',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontSize: '24px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.4)';
-            e.currentTarget.style.transform = 'scale(1.05)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.25)';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-        >
-          ☰
-        </button>
-        <div>
-          <h1 style={{ color: 'white', fontSize: 'clamp(32px, 8vw, 56px)', fontWeight: '800', margin: '0 0 10px 0', textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
-            🎵 TONMOVES
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.95)', fontSize: 'clamp(16px, 3vw, 20px)', margin: 0, textShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
-            Crie vídeos que contam histórias • 100% Grátis
-          </p>
-          <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: '14px', margin: '5px 0 0 0' }}>
-            v4.3 FREE • Whisper API • Auto-Save
-          </p>
+      <header className="app-max" style={{ marginBottom: 'var(--space-24)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-12)', marginBottom: 'var(--space-12)' }}>
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            style={{
+              background: 'var(--surface-raised)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+              padding: '10px 12px',
+              borderRadius: 'var(--radius-8)',
+              cursor: 'pointer',
+              fontSize: '18px',
+            }}
+          >
+            ☰
+          </button>
+          <div>
+            <div style={{ color: 'var(--text)', fontSize: '20px', fontWeight: 700 }}>TONMOVES</div>
+            <div style={{ color: 'var(--muted)', fontSize: '13px' }}>FREE → PRO • canvas render • watermark no FREE</div>
+          </div>
         </div>
       </header>
 
-      <main style={{ maxWidth: '900px', margin: '0 auto' }}>
+      <main className="app-max">
         {renderContent()}
       </main>
-
-      <footer style={{ maxWidth: '900px', margin: '40px auto 0', textAlign: 'center', color: 'rgba(255,255,255,0.9)', fontSize: '14px' }}>
-        <p style={{ margin: '5px 0' }}>Web Speech API • Pollinations.ai • FFmpeg.wasm • 100% Grátis</p>
-        <p style={{ margin: '5px 0' }}>v4.3 FREE • Auto-Save • {aspectRatio} • {currentTheme.name}</p>
-      </footer>
     </div>
   );
 };
+
 
 export default App;
