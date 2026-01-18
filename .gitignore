@@ -1,4 +1,4 @@
-﻿# Environment variables
+# Environment variables
 .env
 .env.local
 .env.production
@@ -12,6 +12,9 @@ dist-ssr/
 *.ps1
 *.sh
 backups_*/
+# root action plan
+ACTION_PLAN.md
+
 
 # Logs
 logs
@@ -31,3 +34,5 @@ node_modules/
 .DS_Store
 Thumbs.db
 .aider*
+.vercel
+.env*.local
