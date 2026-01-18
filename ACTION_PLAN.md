@@ -109,7 +109,7 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F3-T02 — Estado pós-pagamento (flag PRO pronta para uso)
   Depends on: F3-T01
   Acceptance: mock/flag de pagamento setado e propagado ao UI/gates
-  Status: TODO
+  Status: DONE
 
 ### FASE 4 — Pagamento PIX (Mercado Pago) para PRO avulso
 - [ ] F4-T01 — Criar cobrança PIX via Mercado Pago (API)

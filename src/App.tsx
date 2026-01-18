@@ -48,6 +48,8 @@ const App: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [plan, setPlan] = useState<'free' | 'pro'>('free');
+
 
   const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
   const [globalContext, setGlobalContext] = useState<GlobalContext | null>(null);
@@ -541,7 +543,7 @@ const App: React.FC = () => {
       </header>
 
       <main className="app-max">
-        <PlanBar plan="free" onUpgrade={() => setShowPaywall(true)} />
+        <PlanBar plan={plan} onUpgrade={() => setShowPaywall(true)} />
         {renderContent()}
       </main>
 
@@ -555,8 +557,8 @@ const App: React.FC = () => {
             <Badge tone="warn">PIX Mercado Pago</Badge>
             <Badge tone="accent">Libera 1 render PRO (1080p, sem watermark)</Badge>
           </div>
-          <Button variant="primary" size="lg" onClick={() => setShowPaywall(false)}>
-            Copiar chave PIX (mock)
+          <Button variant="primary" size="lg" onClick={() => { setPlan('pro'); setShowPaywall(false); }}>
+            Marcar PRO (mock)
           </Button>
           <Button variant="ghost" onClick={() => setShowPaywall(false)}>
             Fechar
