@@ -115,7 +115,16 @@ export async function renderCanvasVideo({ images, audioFile, aspectRatio, fps = 
     }
     const dx = (width - drawW) / 2;
     const dy = (height - drawH) / 2;
-    ctx.drawImage(img, dx, dy, drawW, drawH);
+
+    // pan/zoom leve (ken burns)
+    const zoom = 1.05 - (progress * 0.05);
+    const panX = Math.sin(progress * Math.PI * 2) * 10;
+    const panY = Math.cos(progress * Math.PI * 2) * 10;
+    const drawWZoom = drawW * zoom;
+    const drawHZoom = drawH * zoom;
+    const dxZoom = dx - panX - (drawWZoom - drawW) / 2;
+    const dyZoom = dy - panY - (drawHZoom - drawH) / 2;
+    ctx.drawImage(img, dxZoom, dyZoom, drawWZoom, drawHZoom);
 
     // Watermark central
     const wm = watermarkText || '';
