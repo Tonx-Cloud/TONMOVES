@@ -11,6 +11,7 @@ import { ImageStorage } from '../utils/imageStorage';
 import { VideoComposer } from '../utils/videoComposer';
 import { generateVideoFromImage } from '../utils/videoGenerator';
 import { renderCanvasVideo } from '../utils/canvasRenderer';
+import { segmentForShortClips } from '../utils/segmentAudio';
 
 interface PipelineDeps {
   setProgress: (p: number) => void;
@@ -113,14 +114,10 @@ export function usePipeline({
       }
       setStatusMessage('Criando prompts visuais...');
 
-      const proProviders = ['together', 'openai', 'gemini'];
+      const proProviders = ['openai', 'gemini'];
       const hasKey = Boolean(apiKeys[selectedProvider]);
-      const fallbackProvider = 'pollinations';
-      const effectiveProvider = proProviders.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
-      if (effectiveProvider !== selectedProvider) {
-        setStatusMessage('🔒 Provider pago sem chave. Usando Pollinations (gratuito).');
-      }
-
+      const fallbackProvider = 'openai';
+      const effectiveProvider = proProviders.includes(selectedProvider) && hasKey ? selectedProvider : fallbackProvider;
       const providerConfig: ProviderConfig = { provider: effectiveProvider, apiKey: apiKeys[effectiveProvider] || undefined };
       imageGeneratorRef.current = new ImageGenerator(providerConfig);
 
@@ -131,6 +128,13 @@ export function usePipeline({
         selectedTheme,
         analysis
       );
+
+      // Segmentação para clipes curtos (VO2) — base para PRO; no FREE apenas informativo
+      const shortSegments = segmentForShortClips(analysis, 6);
+      if (shortSegments.length > 0) {
+        console.log(`⚙️ Segmentação mock: ${shortSegments.length} clipes de ~6s`);
+      }
+
       if (prompts[0]?.globalContext) setGlobalContext(prompts[0].globalContext);
       setProgress(30);
       await saveCheckpoint('prompts-created', 30, {

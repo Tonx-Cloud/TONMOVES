@@ -27,17 +27,17 @@ const TRANSCRIPTION_PROVIDER_STORAGE = 'tonmoves_transcription_provider';
 const TRANSCRIPTION_KEY_STORAGE = 'tonmoves_transcription_key';
 
 export function useConfig(): UseConfigResult {
-  const [selectedProvider, setSelectedProvider] = useState<ImageProvider>('pollinations');
+  const [selectedProvider, setSelectedProvider] = useState<ImageProvider>('openai');
   const [apiKeys, setApiKeys] = useState<Record<ImageProvider, string>>({
-    pollinations: '', pexels: '', together: '', openai: '', gemini: '',
+    openai: '', gemini: '',
   });
 
-  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('runwayml-gen3');
+  const [selectedVideoProvider, setSelectedVideoProvider] = useState<VideoProvider>('local');
   const [videoApiKeys, setVideoApiKeys] = useState<Record<VideoProvider, string>>({
-    local: '', pexels: '', runwayml: '', lumaai: '', stability: '', 'runwayml-gen3': '',
+    local: '',
   });
 
-  const [transcriptionProvider, setTranscriptionProvider] = useState<TranscriptionProvider>('filename');
+  const [transcriptionProvider, setTranscriptionProvider] = useState<TranscriptionProvider>('disabled');
   const [transcriptionApiKey, setTranscriptionApiKey] = useState('');
 
   // Load saved config

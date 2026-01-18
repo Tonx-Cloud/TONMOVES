@@ -137,7 +137,7 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F5-T01 — Segmentação da música em blocos/beat para clipes curtos
   Depends on: F4-T05
   Acceptance: algoritmo retorna segmentos alvo (5–8s) para VO2; parâmetros limitados
-  Status: TODO
+  Status: DONE (mock 6s)
 - [ ] F5-T02 — Geração de clipes VO2 (Gemini) com limites de quantidade e duração
   Depends on: F5-T01
   Acceptance: número máx de clipes e duração por plano; backend aplica limites; sem vídeo longo direto
