@@ -1,51 +1,33 @@
 import React from 'react';
-import type { ImageProvider, VideoProvider, TranscriptionProvider } from '../App';
+import type { ImageProvider, VideoProvider, TranscriptionProvider } from '../types/app';
+import { IMAGE_PROVIDERS_LIST, VIDEO_PROVIDERS_LIST, TRANSCRIPTION_PROVIDERS_LIST } from '../constants';
 
-export const IMAGE_PROVIDERS: { id: ImageProvider; name: string; needsKey: boolean; description: string }[] = [
-    { id: 'pollinations', name: 'Pollinations', needsKey: false, description: 'IA gratuita, sem limite, mais lento' },
-    { id: 'pexels', name: 'Pexels', needsKey: true, description: 'Fotos reais HD, gratuito com API key' },
-    { id: 'together', name: 'Together AI', needsKey: true, description: 'IA rapida, modelo FLUX.1, pago' },
-    { id: 'openai', name: 'OpenAI DALL-E 3', needsKey: true, description: 'IA alta qualidade, pago' },
-    { id: 'gemini', name: 'Google Gemini', needsKey: true, description: 'IA Imagen 3, pago' },
-];
-  
-export const VIDEO_PROVIDERS: { id: VideoProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
-    { id: 'local', name: 'Local (FFmpeg)', needsKey: false, description: 'Gratuito, processa no navegador', icon: '💻' },
-    { id: 'pexels', name: 'Pexels Videos', needsKey: true, description: 'Videos reais HD, gratuito com API key', icon: '📹' },
-    { id: 'runwayml', name: 'RunwayML Gen-3', needsKey: true, description: 'IA geradora de video de alta qualidade', icon: '🎥' },
-    { id: 'lumaai', name: 'Luma Dream Machine', needsKey: true, description: 'Videos cinematograficos com IA', icon: '🌙' },
-    { id: 'stability', name: 'Stability AI', needsKey: true, description: 'Stable Video Diffusion', icon: '🎞️' },
-];
-
-export const TRANSCRIPTION_PROVIDERS: { id: TranscriptionProvider; name: string; needsKey: boolean; description: string; icon: string }[] = [
-    { id: 'filename', name: 'Nome do Arquivo', needsKey: false, description: 'Extrai contexto do nome do arquivo (gratis)', icon: '📄' },
-    { id: 'groq', name: 'Groq Whisper', needsKey: true, description: 'Whisper gratuito, rapido e preciso', icon: '⚡' },
-    { id: 'openai', name: 'OpenAI Whisper', needsKey: true, description: 'Whisper original, muito preciso (~$0.006/min)', icon: '🎯' },
-    { id: 'disabled', name: 'Desativado', needsKey: false, description: 'Nao transcrever, usar apenas analise de audio', icon: '🔇' },
-];
+const IMAGE_PROVIDERS = IMAGE_PROVIDERS_LIST;
+const VIDEO_PROVIDERS = VIDEO_PROVIDERS_LIST.filter(p => p.id !== 'runwayml-gen3');
+const TRANSCRIPTION_PROVIDERS = TRANSCRIPTION_PROVIDERS_LIST;
 
 interface SettingsProps {
-    transcriptionProvider: TranscriptionProvider;
-    setTranscriptionProvider: (provider: TranscriptionProvider) => void;
-    transcriptionApiKey: string;
-    setTranscriptionApiKey: (key: string) => void;
-    handleSaveTranscriptionConfig: () => void;
-    selectedProvider: ImageProvider;
-    setSelectedProvider: (provider: ImageProvider) => void;
-    apiKeys: Record<ImageProvider, string>;
-    setApiKeys: React.Dispatch<React.SetStateAction<Record<ImageProvider, string>>>;
-    handleSaveConfig: () => void;
-    selectedVideoProvider: VideoProvider;
-    setSelectedVideoProvider: (provider: VideoProvider) => void;
-    videoApiKeys: Record<VideoProvider, string>;
-    setVideoApiKeys: React.Dispatch<React.SetStateAction<Record<VideoProvider, string>>>;
-    handleSaveVideoConfig: () => void;
+  transcriptionProvider: TranscriptionProvider;
+  setTranscriptionProvider: (provider: TranscriptionProvider) => void;
+  transcriptionApiKey: string;
+  setTranscriptionApiKey: (key: string) => void;
+  handleSaveTranscriptionConfig: () => void;
+  selectedProvider: ImageProvider;
+  setSelectedProvider: (provider: ImageProvider) => void;
+  apiKeys: Record<ImageProvider, string>;
+  setApiKeys: React.Dispatch<React.SetStateAction<Record<ImageProvider, string>>>;
+  handleSaveConfig: () => void;
+  selectedVideoProvider: VideoProvider;
+  setSelectedVideoProvider: (provider: VideoProvider) => void;
+  videoApiKeys: Record<VideoProvider, string>;
+  setVideoApiKeys: React.Dispatch<React.SetStateAction<Record<VideoProvider, string>>>;
+  handleSaveVideoConfig: () => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({
-    transcriptionProvider, setTranscriptionProvider, transcriptionApiKey, setTranscriptionApiKey, handleSaveTranscriptionConfig,
-    selectedProvider, setSelectedProvider, apiKeys, setApiKeys, handleSaveConfig,
-    selectedVideoProvider, setSelectedVideoProvider, videoApiKeys, setVideoApiKeys, handleSaveVideoConfig
+  transcriptionProvider, setTranscriptionProvider, transcriptionApiKey, setTranscriptionApiKey, handleSaveTranscriptionConfig,
+  selectedProvider, setSelectedProvider, apiKeys, setApiKeys, handleSaveConfig,
+  selectedVideoProvider, setSelectedVideoProvider, videoApiKeys, setVideoApiKeys, handleSaveVideoConfig
 }) => {
   return (
     <div style={{ background: 'white', borderRadius: '20px', padding: '40px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
