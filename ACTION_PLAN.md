@@ -91,11 +91,11 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F2-T02 — Watermark central obrigatória no FREE
   Depends on: F2-T01
   Acceptance: watermark texto “tonmovies.app” aplicada no canvas, opacidade baixa, não removível
-  Status: TODO
+  Status: DONE
 - [ ] F2-T03 — Pipelines FREE sem Gemini/OpenAI; provedores gratuitos habilitados
   Depends on: F2-T01
   Acceptance: geração roda sem chamadas pagas; transcrição local opcional/desativada; imagens gratuitas
-  Status: TODO
+  Status: DONE
 - [ ] F2-T04 — Animação/edição FREE (pan/zoom/crossfade) cobrindo toda a trilha
   Depends on: F2-T01
   Acceptance: vídeo final cobre 100% da duração; sem uso de VO2; loops/efeitos leves aplicados

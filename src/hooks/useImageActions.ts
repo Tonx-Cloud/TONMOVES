@@ -25,10 +25,10 @@ export function useImageActions({
 
   const ensureGenerator = () => {
     if (!imageGeneratorRef.current) {
-      const requiresKey = ['together', 'openai', 'gemini'];
+      const proProviders = ['together', 'openai', 'gemini'];
       const hasKey = Boolean(apiKeys[selectedProvider]);
       const fallbackProvider = 'pollinations';
-      const effectiveProvider = requiresKey.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
+      const effectiveProvider = proProviders.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
       imageGeneratorRef.current = new ImageGenerator({
         provider: effectiveProvider as any,
         apiKey: apiKeys[effectiveProvider] || undefined,

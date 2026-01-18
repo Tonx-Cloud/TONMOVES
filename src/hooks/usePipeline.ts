@@ -113,10 +113,10 @@ export function usePipeline({
       }
       setStatusMessage('Criando prompts visuais...');
 
-      const requiresKey = ['together', 'openai', 'gemini'];
+      const proProviders = ['together', 'openai', 'gemini'];
       const hasKey = Boolean(apiKeys[selectedProvider]);
       const fallbackProvider = 'pollinations';
-      const effectiveProvider = requiresKey.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
+      const effectiveProvider = proProviders.includes(selectedProvider) && !hasKey ? fallbackProvider : selectedProvider;
       if (effectiveProvider !== selectedProvider) {
         setStatusMessage('🔒 Provider pago sem chave. Usando Pollinations (gratuito).');
       }
