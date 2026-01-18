@@ -119,6 +119,7 @@ export function usePipeline({
       const fallbackProvider = 'openai';
       const effectiveProvider = proProviders.includes(selectedProvider) && hasKey ? selectedProvider : fallbackProvider;
       const providerConfig: ProviderConfig = { provider: effectiveProvider, apiKey: apiKeys[effectiveProvider] || undefined };
+      if (!hasKey) setStatusMessage('🔒 Configure chave OpenAI/Gemini para gerar imagens.');
       imageGeneratorRef.current = new ImageGenerator(providerConfig);
 
       await ensureStorage();

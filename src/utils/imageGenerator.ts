@@ -367,16 +367,6 @@ export class ImageGenerator {
       let imageUrl: string;
 
       switch (provider) {
-        case 'pexels':
-          if (!apiKey) throw new Error('Pexels requer API key');
-          imageUrl = await this.searchPexelsPhoto(prompt, theme, apiKey);
-          break;
-
-        case 'together':
-          if (!apiKey) throw new Error('Together AI requer API key');
-          imageUrl = await this.generateWithTogetherAI(uniquePrompt, apiKey);
-          break;
-
         case 'openai':
           if (!apiKey) throw new Error('OpenAI requer API key');
           imageUrl = await this.generateWithOpenAI(uniquePrompt, apiKey);
@@ -387,11 +377,10 @@ export class ImageGenerator {
           imageUrl = await this.generateWithGemini(uniquePrompt, apiKey);
           break;
 
-        case 'pollinations':
         default:
-          imageUrl = this.generateWithPollinations(uniquePrompt);
-          break;
+          throw new Error('Provider não suportado');
       }
+
 
       logger.image.generated(imageUrl, provider);
       return imageUrl;
@@ -510,40 +499,36 @@ export class ImageGenerator {
   }
 
   private async generateWithGemini(prompt: string, apiKey: string): Promise<string> {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instances: [{ prompt: prompt }],
-          parameters: {
-            sampleCount: 1,
-            aspectRatio: '9:16',
-          }
-        })
-      }
-    );
+    // Placeholder: usar endpoint suportado; remover bloco duplicado antigo
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagegeneration:predict?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        instances: [{ prompt }],
+      }),
+    });
 
     if (!response.ok) {
-      const errorBody = await response.json().catch(() => ({ error: { message: 'Resposta de erro inválida' } }));
-      let message = `Gemini Imagen error: ${response.status}`;
-      if (response.status === 400) {
-        message += ' - API Key inválida ou problema na requisição.';
-      } else if (response.status >= 500) {
-        message += ' - O serviço do Google pode estar temporariamente fora do ar.';
-      } else {
-        message += ` - ${errorBody.error?.message || 'Erro desconhecido'}`;
-      }
-      throw new Error(message);
+      const errorText = await response.text();
+      throw new Error(`Gemini Imagen error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    if (!data.predictions?.[0]?.bytesBase64Encoded) {
-      throw new Error('Gemini: Resposta inválida, sem imagem retornada.');
+    const base64 = data?.predictions?.[0]?.bytesBase64Encoded;
+    if (!base64) throw new Error('Gemini: resposta inválida');
+
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
-    return `data:image/png;base64,${data.predictions[0].bytesBase64Encoded}`;
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'image/png' });
+    return URL.createObjectURL(blob);
   }
+
 
   private generateWithPollinations(prompt: string): string {
     const encodedPrompt = encodeURIComponent(prompt);

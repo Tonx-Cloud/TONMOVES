@@ -3,8 +3,8 @@ import type { ImageProvider, VideoProvider, TranscriptionProvider } from '../typ
 type ProviderBase<T> = { id: T; name: string; needsKey: boolean; description: string; proOnly?: boolean; icon?: string };
 
 export const IMAGE_PROVIDERS_LIST: ProviderBase<ImageProvider>[] = [
-  { id: 'openai', name: 'OpenAI DALL-E 3 (PRO)', needsKey: true, description: 'Somente PRO, via backend', proOnly: true },
-  { id: 'gemini', name: 'Google Gemini (PRO)', needsKey: true, description: 'Somente PRO, via backend', proOnly: true },
+  { id: 'openai', name: 'OpenAI DALL-E 3 (PRO)', needsKey: true, description: 'Backend PRO' },
+  { id: 'gemini', name: 'Google Gemini (PRO)', needsKey: true, description: 'Backend PRO' },
 ];
 
 export const VIDEO_PROVIDERS_LIST: ProviderBase<VideoProvider>[] = [
