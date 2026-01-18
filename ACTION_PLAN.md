@@ -115,15 +115,15 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F4-T01 — Criar cobrança PIX via Mercado Pago (API)
   Depends on: F3-T02
   Acceptance: endpoint serverless cria charge PIX; retorna payload para modal
-  Status: TODO
+  Status: DONE (mock)
 - [ ] F4-T02 — Modal PIX (QR + copia-e-cola) no UI
   Depends on: F4-T01
   Acceptance: modal exibe valor, QR e texto copia-e-cola; ação copiar funcional
-  Status: TODO
+  Status: DONE (mock)
 - [ ] F4-T03 — Webhook de confirmação PIX
   Depends on: F4-T01
   Acceptance: webhook recebe confirmação, valida assinatura, registra evento
-  Status: TODO
+  Status: DONE (mock)
 - [ ] F4-T04 — Validação de pagamento e liberação PRO para um render específico
   Depends on: F4-T03
   Acceptance: pagamento confirmado libera 1 render PRO; estado persistido no backend
