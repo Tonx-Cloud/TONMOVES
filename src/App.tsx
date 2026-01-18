@@ -21,6 +21,7 @@ import { Button } from './ui/design-system/Button';
 import { Banner } from './ui/design-system/Banner';
 import { Badge } from './ui/design-system/Badge';
 import { PlanBar } from './ui/design-system/PlanBar';
+import { Modal } from './ui/design-system/Modal';
 
 const IMAGE_PROVIDERS = IMAGE_PROVIDERS_LIST;
 const VIDEO_PROVIDERS = VIDEO_PROVIDERS_LIST;
@@ -46,6 +47,8 @@ const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<Step>('upload');
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
+
   const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis | null>(null);
   const [globalContext, setGlobalContext] = useState<GlobalContext | null>(null);
   const [narrative, setNarrative] = useState<NarrativeAnalysis | null>(null);
@@ -510,7 +513,6 @@ const App: React.FC = () => {
     }
   };
 
-
   return (
     <div className="app-shell">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} setCurrentView={setCurrentView} onNewProject={handleReset} />
@@ -539,9 +541,28 @@ const App: React.FC = () => {
       </header>
 
       <main className="app-max">
-        <PlanBar plan="free" onUpgrade={() => setCurrentView('settings')} />
+        <PlanBar plan="free" onUpgrade={() => setShowPaywall(true)} />
         {renderContent()}
       </main>
+
+      <Modal open={showPaywall} onClose={() => setShowPaywall(false)} title="Gerar versão PRO">
+        <div className="stack-vertical" style={{ gap: 'var(--space-12)' }}>
+          <div style={{ fontSize: 14, color: 'var(--muted)' }}>
+            Após gerar e assistir o FREE, pague via PIX para liberar 1 render PRO.
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            <Badge tone="neutral">Valor: defina no checkout</Badge>
+            <Badge tone="warn">PIX Mercado Pago</Badge>
+            <Badge tone="accent">Libera 1 render PRO (1080p, sem watermark)</Badge>
+          </div>
+          <Button variant="primary" size="lg" onClick={() => setShowPaywall(false)}>
+            Copiar chave PIX (mock)
+          </Button>
+          <Button variant="ghost" onClick={() => setShowPaywall(false)}>
+            Fechar
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 };

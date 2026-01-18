@@ -99,13 +99,13 @@ Status atual: F0 e F1 concluídos; demais TODO.
 - [ ] F2-T04 — Animação/edição FREE (pan/zoom/crossfade) cobrindo toda a trilha
   Depends on: F2-T01
   Acceptance: vídeo final cobre 100% da duração; sem uso de VO2; loops/efeitos leves aplicados
-  Status: TODO
+  Status: DONE
 
 ### FASE 3 — Preview + Paywall (PIX)
 - [ ] F3-T01 — Tela/modal Paywall após vídeo FREE (CTA “Gerar versão PRO”)
   Depends on: F2-T02
   Acceptance: modal com valor, chave PIX copiar, instruções
-  Status: TODO
+  Status: DONE
 - [ ] F3-T02 — Estado pós-pagamento (flag PRO pronta para uso)
   Depends on: F3-T01
   Acceptance: mock/flag de pagamento setado e propagado ao UI/gates
